@@ -13,13 +13,11 @@
 #include "vec.h"
 #include "ops.h"
 #include "ggml.h"
+#include "ggml-nepenthes-c.h"
 #include "common.h"
 #include "tiled/tiled.h"
 
 
-extern int ggml_nepenthes_trace_enabled(void);
-extern void ggml_nepenthes_emit_cpu_work(uint64_t worker_id, uint64_t node_count, uint64_t duration_ns);
-extern void ggml_nepenthes_emit_cpu_wait(uint64_t worker_id, uint64_t duration_ns);
 
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
