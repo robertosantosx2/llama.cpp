@@ -17,6 +17,7 @@
 #include "common.h"
 #include "fit.h"
 #include "llama.h"
+#include "../../src/nepenthes_jsonl_sink.hpp"
 #include "log.h"
 #include "sampling.h"
 #include "speculative.h"
@@ -669,6 +670,12 @@ struct server_slot {
             GGML_ASSERT(task);
 
             SLT_INF(*this, "stop processing: n_tokens = %d, truncated = %d\n", prompt.n_tokens(), truncated);
+
+            if (task) {
+                nepenthes::emit(nepenthes::EventType::request_end, "server.task",
+                        static_cast<std::uint64_t>(task->id), static_cast<std::uint64_t>(id),
+                        nepenthes::phase_instant, static_cast<std::uint64_t>(task->id));
+            }
 
             t_last_used = ggml_time_us();
 
@@ -2048,6 +2055,11 @@ private:
         slot.n_predict_max = task.params.n_predict != -1 ? task.params.n_predict : params_base.n_predict;
 
         slot.task = std::make_unique<const server_task>(std::move(task));
+
+        nepenthes::ensure_sink_from_env();
+        nepenthes::emit(nepenthes::EventType::request_start, "server.task",
+                static_cast<std::uint64_t>(slot.task->id), static_cast<std::uint64_t>(slot.id),
+                nepenthes::phase_instant, static_cast<std::uint64_t>(slot.task->id));
 
         if (slot.task->type == SERVER_TASK_TYPE_TTS) {
             slot.state = SLOT_STATE_PROCESSING_PROMPT;
