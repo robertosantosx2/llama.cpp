@@ -59,3 +59,22 @@ A final `sink_summary` record reports events drained, dropped events and writer 
 ## Validation
 
 The NEPENTHES workflow compiles and runs the event and JSONL tests, then builds the CPU llama-server target. This validates the CPU code path only. CUDA compilation and a reproducible runtime capture on the target MSI are separate acceptance gates.
+
+
+## Backend and CUDA probes (follow-up slice)
+
+The shared event API now lives in ggml-base so llama and backend translation units use one process-wide sink. The added backend coverage is:
+
+- Generic ggml backend buffer creation and destruction (wrapper lifetime and byte size).
+- CUDA device allocation outcomes: success, OOM and other errors.
+- Legacy CUDA pool reuse, logical return, actual release, and OOM flush/retry.
+- CUDA VMM pool allocation/free and physical allocation outcomes.
+- Pinned-host allocation/free and fallback to ordinary CPU buffers.
+- CUDA H2D/D2H transfers through synchronous buffer operations and asynchronous backend submissions; 2D and batch paths retain row/count or tensor-count metadata.
+- CUDA D2D/peer copy attempts and batch copies.
+- CUDA op dispatch duration, identified by ggml op enum and output element count.
+- CUDA stream synchronization duration.
+
+Interpretation is deliberately layered: a generic ggml buffer event is not the same as a physical CUDA allocation. Pool-return/free events distinguish logical reuse from a physical cudaFree/unmap. Async transfer events measure host submission, while the synchronous buffer-interface events include the explicit stream synchronization in those callsites. CUDA op dispatch is host dispatch time, not GPU kernel duration.
+
+The CUDA CI job compiles the backend for compute capability 8.6 using a CUDA development container. It does not require a GPU and does not validate runtime behavior on the MSI. Nsight Systems/CUPTI remain the source for device-side kernel timing and transfer completion.
