@@ -2056,7 +2056,6 @@ private:
 
         slot.task = std::make_unique<const server_task>(std::move(task));
 
-        nepenthes::ensure_sink_from_env();
         nepenthes::emit(nepenthes::EventType::request_start, "server.task",
                 static_cast<std::uint64_t>(slot.task->id), static_cast<std::uint64_t>(slot.id),
                 nepenthes::phase_instant, static_cast<std::uint64_t>(slot.task->id));
