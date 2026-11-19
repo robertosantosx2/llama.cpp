@@ -84,6 +84,10 @@ int main() {
         }
         if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
             summary_seen = true;
+            assert(line.find("\"label\":\"sink.summary\"") != std::string::npos);
+            assert(line.find("\"monotonic_ns\":") != std::string::npos);
+            assert(line.find("\"request_id\":0") != std::string::npos);
+            assert(line.find("\"value0\":4261") != std::string::npos);
             assert(line.find("\"events_drained\":4261") != std::string::npos);
             assert(line.find("\"dropped_events\":0") != std::string::npos);
             assert(line.find("\"write_errors\":0") != std::string::npos);
