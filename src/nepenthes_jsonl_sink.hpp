@@ -184,12 +184,12 @@ private:
         const auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         const auto summary_id = next_id_.fetch_add(1, std::memory_order_relaxed);
-        output_ << "{\\\"schema_version\\\":\\\"1.0\\\",\\\"run_id\\\":\\\"" << run_id_json_
-                << "\\\",\\\"event_id\\\":\\\"llama-" << summary_id
-                << "\\\",\\\"source\\\":\\\"llama.cpp\\\",\\\"timestamp_unix_ns\\\":" << wall_ns
-                << ",\\\"event_kind\\\":\\\"sink_summary\\\",\\\"events_drained\\\":" << (summary_id - 1)
-                << ",\\\"dropped_events\\\":" << dropped_.load(std::memory_order_relaxed)
-                << ",\\\"write_errors\\\":" << write_errors_.load(std::memory_order_relaxed) << "}\\n";
+        output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
+                << "\",\"event_id\":\"llama-" << summary_id
+                << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << wall_ns
+                << ",\"event_kind\":\"sink_summary\",\"events_drained\":" << (summary_id - 1)
+                << ",\"dropped_events\":" << dropped_.load(std::memory_order_relaxed)
+                << ",\"write_errors\":" << write_errors_.load(std::memory_order_relaxed) << "}\n";
         output_.flush();
         if (!output_) write_errors_.fetch_add(1, std::memory_order_relaxed);
     }
