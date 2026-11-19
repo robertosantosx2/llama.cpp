@@ -267,6 +267,7 @@ struct server_batch {
 
 struct server_slot {
     int id;
+    std::uint64_t nepenthes_correlation_token = 0;
 
     llama_context * ctx_tgt = nullptr;
     llama_context * ctx_dft = nullptr;
@@ -455,6 +456,7 @@ struct server_slot {
 
         task_prev = std::move(task);
         task.reset();
+        nepenthes_correlation_token = 0;
 
         // note: callback_on_reset() must have run before this, see release()
         stats = {};
@@ -674,7 +676,8 @@ struct server_slot {
             if (task) {
                 nepenthes::emit(nepenthes::EventType::request_end, "server.task",
                         static_cast<std::uint64_t>(task->id), static_cast<std::uint64_t>(id),
-                        nepenthes::phase_instant, static_cast<std::uint64_t>(task->id));
+                        nepenthes::phase_instant, static_cast<std::uint64_t>(task->id), 0,
+                        nepenthes_correlation_token);
             }
 
             t_last_used = ggml_time_us();
@@ -2055,10 +2058,12 @@ private:
         slot.n_predict_max = task.params.n_predict != -1 ? task.params.n_predict : params_base.n_predict;
 
         slot.task = std::make_unique<const server_task>(std::move(task));
+        slot.nepenthes_correlation_token = nepenthes::next_correlation_token();
 
         nepenthes::emit(nepenthes::EventType::request_start, "server.task",
                 static_cast<std::uint64_t>(slot.task->id), static_cast<std::uint64_t>(slot.id),
-                nepenthes::phase_instant, static_cast<std::uint64_t>(slot.task->id));
+                nepenthes::phase_instant, static_cast<std::uint64_t>(slot.task->id), 0,
+                slot.nepenthes_correlation_token);
 
         if (slot.task->type == SERVER_TASK_TYPE_TTS) {
             slot.state = SLOT_STATE_PROCESSING_PROMPT;
