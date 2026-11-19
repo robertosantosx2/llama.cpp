@@ -595,7 +595,7 @@ void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, ll
 
 void llama_kv_cache::seq_keep(llama_seq_id seq_id) {
     nepenthes::ScopedEvent nepenthes_kv_keep(nepenthes::EventType::kv_cache, "kv.seq_keep",
-            static_cast<std::uint64_t>(seq_id), 0, nepenthes::kv_metadata(nepenthes::KvOp::seq_keep));
+            static_cast<std::uint64_t>(seq_id), 0, 0, nepenthes::kv_metadata(nepenthes::KvOp::seq_keep));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return;
@@ -800,7 +800,7 @@ llama_memory_context_ptr llama_kv_cache::init_update(llama_context * lctx, bool 
 
 llama_kv_cache::slot_info_vec_t llama_kv_cache::prepare(const std::vector<llama_ubatch> & ubatches) {
     nepenthes::ScopedEvent nepenthes_kv_prepare(nepenthes::EventType::kv_cache, "kv.prepare",
-            static_cast<std::uint64_t>(ubatches.size()), 0, nepenthes::kv_metadata(nepenthes::KvOp::prepare));
+            static_cast<std::uint64_t>(ubatches.size()), 0, 0, nepenthes::kv_metadata(nepenthes::KvOp::prepare));
     llama_kv_cache::slot_info_vec_t res;
 
     struct state_t {
