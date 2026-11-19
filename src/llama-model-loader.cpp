@@ -1652,6 +1652,8 @@ bool llama_model_loader::load_all_data(
         llama_mlocks * lmlocks,
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
+    nepenthes::ScopedEvent nepenthes_model_data(nepenthes::EventType::model_load, "llama.model_load_weights",
+            static_cast<std::uint64_t>(size_data), static_cast<std::uint64_t>(files.size()));
     if (files.empty()) {
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
             set_tensor_data(t, set_tensor_data_ud);
