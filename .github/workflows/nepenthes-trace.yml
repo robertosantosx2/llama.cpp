@@ -25,6 +25,10 @@ on:
     branches: [master]
     paths:
       - "src/nepenthes_trace.hpp"
+      - "src/nepenthes_jsonl_sink.hpp"
+      - "src/nepenthes_jsonl_sink.cpp"
+      - "src/llama-model-loader.cpp"
+      - "src/CMakeLists.txt"
       - "ggml/include/ggml-nepenthes.hpp"
       - "ggml/src/ggml-nepenthes.cpp"
       - "ggml/src/ggml-backend.cpp"
