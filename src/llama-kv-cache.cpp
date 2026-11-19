@@ -5,6 +5,8 @@
 #include "llama-model.h"
 #include "llama-context.h"
 
+#include "nepenthes_trace.hpp"
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -425,6 +427,8 @@ void llama_kv_cache::init_rotation(const char * name_tag) {
 }
 
 void llama_kv_cache::clear(bool data) {
+    nepenthes::emit(nepenthes::EventType::kv_cache, "kv.clear",
+            static_cast<std::uint64_t>(n_stream), data ? 1 : 0);
     for (uint32_t s = 0; s < n_stream; ++s) {
         v_cells[s].reset();
         v_heads[s] = 0;
@@ -438,6 +442,7 @@ void llama_kv_cache::clear(bool data) {
 }
 
 bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
+    nepenthes::ScopedEvent nepenthes_kv_rm(nepenthes::EventType::kv_cache, "kv.seq_rm");
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return true;
@@ -495,6 +500,8 @@ bool llama_kv_cache::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
 }
 
 void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
+    nepenthes::ScopedEvent nepenthes_kv_cp(nepenthes::EventType::kv_cache, "kv.seq_cp",
+            static_cast<std::uint64_t>(seq_id_src), static_cast<std::uint64_t>(seq_id_dst));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return;
@@ -852,6 +859,8 @@ llama_kv_cache::slot_info_vec_t llama_kv_cache::prepare(const std::vector<llama_
 }
 
 bool llama_kv_cache::update(llama_context * lctx, bool do_shift, const stream_copy_info & sc_info) {
+    nepenthes::ScopedEvent nepenthes_kv_update(nepenthes::EventType::kv_cache, "kv.update",
+            do_shift ? 1 : 0, static_cast<std::uint64_t>(sc_info.ssrc.size()));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return true;
@@ -1135,6 +1144,8 @@ llama_kv_cache::slot_info llama_kv_cache::find_slot(const llama_ubatch & ubatch,
 }
 
 void llama_kv_cache::apply_ubatch(const slot_info & sinfo, const llama_ubatch & ubatch) {
+    nepenthes::ScopedEvent nepenthes_kv_ubatch(nepenthes::EventType::kv_cache, "kv.apply_ubatch",
+            static_cast<std::uint64_t>(ubatch.n_tokens), static_cast<std::uint64_t>(sinfo.n_stream()));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return;
