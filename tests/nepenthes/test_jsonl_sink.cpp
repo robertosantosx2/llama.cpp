@@ -22,6 +22,8 @@ int main() {
         nepenthes::emit(nepenthes::EventType::kv_cache, "kv.seq_rm", 1, 0,
                         nepenthes::phase_instant, 0, 0, 0,
                         nepenthes::kv_metadata(nepenthes::KvOp::seq_rm));
+        nepenthes::emit(nepenthes::EventType::cpu_work, "cpu.worker_graph_compute", 2, 64,
+                        nepenthes::phase_instant, 0, 2500, 0, nepenthes::cpu_metadata());
         std::vector<std::thread> producers;
         for (std::uint64_t t = 0; t < 4; ++t) {
             producers.emplace_back([t] {
@@ -61,6 +63,9 @@ int main() {
             assert(line.find("\"backend\":\"cuda\"") != std::string::npos);
             assert(line.find("\"memory_kind\":\"device\"") != std::string::npos);
         }
+        if (line.find("\"event_kind\":\"cpu_work\"") != std::string::npos) {
+            assert(line.find("\"backend\":\"cpu\"") != std::string::npos);
+        }
         if (line.find("\"event_kind\":\"transfer\"") != std::string::npos) {
             assert(line.find("\"memcpy_kind\":\"host_to_device\"") != std::string::npos);
             assert(line.find("\"raw_memcpy_kind\":1") != std::string::npos);
@@ -79,7 +84,7 @@ int main() {
         }
         if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
             summary_seen = true;
-            assert(line.find("\"events_drained\":4260") != std::string::npos);
+            assert(line.find("\"events_drained\":4261") != std::string::npos);
             assert(line.find("\"dropped_events\":0") != std::string::npos);
             assert(line.find("\"write_errors\":0") != std::string::npos);
         }
@@ -87,7 +92,7 @@ int main() {
     }
     input.close();
     std::remove(path.c_str());
-    assert(count == 4261);
+    assert(count == 4262);
     assert(summary_seen);
     return 0;
 }
