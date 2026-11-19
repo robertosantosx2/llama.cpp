@@ -40,7 +40,7 @@ int main() {
         // This catches a literal backslash+n being written instead of a newline.
         assert(!line.empty());
         assert(line.back() == '}');
-        assert(line.find("\"source\":\"tandem.cpp\"") != std::string::npos);
+        assert(line.find("\"source\":\"llama.cpp\"") != std::string::npos);
         assert(line.find("\"run_id\":\"run\\\"line\\nbreak\"") != std::string::npos);
         if (count < 256) {
             assert(line.find("\"event_kind\":\"kernel\"") != std::string::npos);
