@@ -4,6 +4,7 @@
 #include "ggml.h"
 #include "ggml-nepenthes-c.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 
@@ -14,7 +15,7 @@ enum class EventType : std::uint8_t {
     model_load, model_unload,
     routing, cache_hit, cache_miss, eviction, prefetch,
     kv_cache, allocation, free_event, transfer, kernel,
-    sync, cpu_work, stall, oom, fallback, error,
+    sync, cpu_work, stall, oom, fallback, error, clock_calibration,
 };
 
 enum EventFlags : std::uint16_t {
@@ -28,8 +29,10 @@ enum EventFlags : std::uint16_t {
 
 struct Event {
     std::uint64_t monotonic_ns = 0;
+    std::uint64_t timestamp_unix_ns = 0;
     std::uint64_t duration_ns = 0;
     std::uint64_t request_id = 0;
+    std::uint64_t correlation_token = 0;
     std::uint64_t value0 = 0;
     std::uint64_t value1 = 0;
     EventType type = EventType::error;
@@ -46,7 +49,13 @@ GGML_API void emit(EventType type, const char * label = nullptr,
                    std::uint64_t value0 = 0, std::uint64_t value1 = 0,
                    std::uint16_t flags = phase_instant,
                    std::uint64_t request_id = 0,
-                   std::uint64_t duration_ns = 0) noexcept;
+                   std::uint64_t duration_ns = 0,
+                   std::uint64_t correlation_token = 0) noexcept;
+
+inline std::uint64_t next_correlation_token() noexcept {
+    static std::atomic<std::uint64_t> next{1};
+    return next.fetch_add(1, std::memory_order_relaxed);
+}
 
 inline std::uint64_t now_ns() noexcept {
     return static_cast<std::uint64_t>(
