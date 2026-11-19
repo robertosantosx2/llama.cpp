@@ -80,3 +80,15 @@ Interpretation is deliberately layered: a generic ggml buffer event is not the s
 The CUDA CI job compiles the backend for compute capability 8.6 using a CUDA development container. It does not require a GPU and does not validate runtime behavior on the MSI. Nsight Systems/CUPTI remain the source for device-side kernel timing and transfer completion.
 
 - Model lifecycle: `model_load` spans tensor setup and weight loading; `model_unload` records model byte/element metadata at destruction. The sink is initialized from the model-loader constructor so allocation/loading events are not missed.
+
+
+## CPU worker probes (follow-up slice)
+
+The CPU backend now emits two additional event classes through a small C ABI bridge into the shared ggml-base sink:
+
+- `cpu_work` / `cpu.worker_graph_compute`: one span per CPU graph worker invocation, with worker index, graph node count and elapsed host duration. The duration includes that worker's graph loop and its graph barriers; it is not an exclusive CPU-time counter.
+- `stall` / `cpu.worker_wait`: elapsed time spent in the condition-variable sleep path while an idle worker waits for new graph work. Busy polling is not counted as sleeping wait time.
+
+When tracing is disabled, the worker checks the shared enabled flag and skips the clock reads and event bridge. These events use request_id=0 because the CPU worker pool has no safe request-scoped identity propagation at this layer.
+
+No generic CPU expert-prefetch worker is present in this upstream llama.cpp path; NEPENTHES does not fabricate prefetch events. Model-specific MoE CPU fallback scheduling remains reported by the MoE planner events. This slice does not instrument every CPU operator or every barrier individually, avoiding a high-frequency event flood.
