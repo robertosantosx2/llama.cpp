@@ -3320,6 +3320,10 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
         return false;
     }
 
+    nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_async_attempt",
+            static_cast<std::uint64_t>(ggml_nbytes(dst)),
+            static_cast<std::uint64_t>(backend_src != backend_dst ? 1 : 0));
+
     if (backend_src != backend_dst) {
         // copy on src stream
         // compare the backing physical devices: distinct virtual devices may share one physical GPU,
