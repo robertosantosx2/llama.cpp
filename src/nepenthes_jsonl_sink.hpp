@@ -125,6 +125,90 @@ private:
         return "error";
     }
 
+    static const char * backend_name(Backend value) noexcept {
+        switch (value) {
+            case Backend::cpu: return "cpu";
+            case Backend::cuda: return "cuda";
+            case Backend::metal: return "metal";
+            case Backend::vulkan: return "vulkan";
+            case Backend::rocm: return "rocm";
+            case Backend::musa: return "musa";
+            case Backend::unknown: return nullptr;
+        }
+        return nullptr;
+    }
+
+    static const char * memory_kind_name(MemoryKind value) noexcept {
+        switch (value) {
+            case MemoryKind::host: return "host";
+            case MemoryKind::host_pinned: return "host_pinned";
+            case MemoryKind::device: return "device";
+            case MemoryKind::managed: return "managed";
+            case MemoryKind::vmm: return "vmm";
+            case MemoryKind::unknown: return nullptr;
+        }
+        return nullptr;
+    }
+
+    static const char * memcpy_kind_name(MemcpyKind value) noexcept {
+        switch (value) {
+            case MemcpyKind::host_to_host: return "host_to_host";
+            case MemcpyKind::host_to_device: return "host_to_device";
+            case MemcpyKind::device_to_host: return "device_to_host";
+            case MemcpyKind::device_to_device: return "device_to_device";
+            case MemcpyKind::peer_to_peer: return "peer_to_peer";
+            case MemcpyKind::default_kind: return "default";
+            case MemcpyKind::unknown: return nullptr;
+        }
+        return nullptr;
+    }
+
+    static const char * sync_type_name(SyncType value) noexcept {
+        switch (value) {
+            case SyncType::stream: return "stream";
+            case SyncType::device: return "device";
+            case SyncType::event: return "event";
+            case SyncType::context: return "context";
+            case SyncType::unknown: return nullptr;
+        }
+        return nullptr;
+    }
+
+    static const char * kv_op_name(KvOp value) noexcept {
+        switch (value) {
+            case KvOp::clear: return "clear";
+            case KvOp::seq_rm: return "seq_rm";
+            case KvOp::seq_cp: return "seq_cp";
+            case KvOp::seq_keep: return "seq_keep";
+            case KvOp::seq_add: return "seq_add";
+            case KvOp::seq_div: return "seq_div";
+            case KvOp::prepare: return "prepare";
+            case KvOp::update: return "update";
+            case KvOp::apply_ubatch: return "apply_ubatch";
+            case KvOp::unknown: return nullptr;
+        }
+        return nullptr;
+    }
+
+    static const char * attribution_level_name(const Event & event) noexcept {
+        const auto value = event.metadata.attribution_level != AttributionLevel::unknown
+            ? event.metadata.attribution_level
+            : (event.correlation_token != 0 ? AttributionLevel::exact : AttributionLevel::unknown);
+        switch (value) {
+            case AttributionLevel::exact: return "exact";
+            case AttributionLevel::windowed: return "windowed";
+            case AttributionLevel::device_wide: return "device_wide";
+            case AttributionLevel::estimated: return "estimated";
+            case AttributionLevel::unknown: return nullptr;
+        }
+        return nullptr;
+    }
+
+    static void write_optional_string(std::ofstream & output, const char * value) {
+        if (value) output << "\\\"" << value << "\\\"";
+        else output << "null";
+    }
+
     static void callback(const Event & event) noexcept {
         JsonlSink * sink = active_.load(std::memory_order_acquire);
         if (sink) sink->push(event);
