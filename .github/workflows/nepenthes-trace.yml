@@ -10,6 +10,7 @@ on:
       - "src/llama-kv-cache.cpp"
       - "tools/server/server-context.cpp"
       - "tests/nepenthes/**"
+      - "docs/nepenthes-runtime-trace.md"
       - ".github/workflows/nepenthes-trace.yml"
   push:
     branches: [master]
