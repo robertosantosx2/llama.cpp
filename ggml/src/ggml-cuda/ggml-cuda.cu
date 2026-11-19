@@ -748,8 +748,20 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             if (pool_addr == 0) {
                 CUresult err = cuMemAddressReserve(&pool_addr, max_size, 0, 0, 0);
                 while (err == CUDA_ERROR_OUT_OF_MEMORY && (max_size >> 1) >= reserve_size && (max_size >> 1) >= granularity) {
+                    nepenthes::emit(nepenthes::EventType::fallback, "cuda.vmm_address_reserve_shrink",
+                            static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(device),
+                            nepenthes::flag_device);
                     max_size >>= 1;
                     err = cuMemAddressReserve(&pool_addr, max_size, 0, 0, 0);
+                }
+                if (err == CUDA_ERROR_OUT_OF_MEMORY) {
+                    nepenthes::emit(nepenthes::EventType::oom, "cuda.vmm_address_reserve",
+                            static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(device),
+                            static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                } else if (err != CUDA_SUCCESS) {
+                    nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_address_reserve",
+                            static_cast<std::uint64_t>(err), static_cast<std::uint64_t>(device),
+                            static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
                 }
                 CU_CHECK(err);
                 if (max_size < CUDA_POOL_VMM_MAX_SIZE) {
