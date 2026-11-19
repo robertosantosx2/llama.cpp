@@ -13,7 +13,8 @@ int main() {
     {
         nepenthes::JsonlSink sink(path, "run\"line\nbreak");
         for (std::uint64_t i = 0; i < 256; ++i) {
-            nepenthes::emit(nepenthes::EventType::kernel, "cuda.kernel", i, 4096);
+            nepenthes::emit(nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
+                            nepenthes::phase_instant, 0, 0, i + 1);
         }
         std::vector<std::thread> producers;
         for (std::uint64_t t = 0; t < 4; ++t) {
@@ -43,8 +44,14 @@ int main() {
         assert(line.back() == '}');
         assert(line.find("\"source\":\"llama.cpp\"") != std::string::npos);
         assert(line.find("\"run_id\":\"run\\\"line\\nbreak\"") != std::string::npos);
-        if (count < 256) {
-            assert(line.find("\"event_kind\":\"kernel\"") != std::string::npos);
+        if (line.find("\"event_kind\":\"kernel\"") != std::string::npos) {
+            assert(line.find("\"correlation_token\":") != std::string::npos);
+            assert(line.find("\"attribution_level\":\"exact\"") != std::string::npos);
+            assert(line.find("\"clock_domain\":\"steady_clock\"") != std::string::npos);
+        }
+        if (line.find("\"event_kind\":\"clock_calibration\"") != std::string::npos) {
+            assert(line.find("\"timestamp_unix_ns\":") != std::string::npos);
+            assert(line.find("\"monotonic_ns\":") != std::string::npos);
         }
         if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
             summary_seen = true;
@@ -56,7 +63,7 @@ int main() {
     }
     input.close();
     std::remove(path.c_str());
-    assert(count == 4257);
+    assert(count == 4259);
     assert(summary_seen);
     return 0;
 }
