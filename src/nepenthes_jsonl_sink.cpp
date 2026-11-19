@@ -14,8 +14,10 @@ void ensure_sink_from_env() noexcept {
             return nullptr;
         }
         const char * run = std::getenv("NEPENTHES_RUN_ID");
+        const char * profile = std::getenv("NEPENTHES_PROFILE");
+        const bool request_only = profile != nullptr && std::string(profile) == "latency-critical";
         try {
-            return std::make_unique<JsonlSink>(path, run ? run : "llama.cpp");
+            return std::make_unique<JsonlSink>(path, run ? run : "llama.cpp", request_only);
         } catch (const std::exception & e) {
             std::fprintf(stderr, "NEPENTHES: cannot start JSONL sink: %s\n", e.what());
             return nullptr;
