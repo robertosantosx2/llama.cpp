@@ -1,6 +1,7 @@
 #include "ggml-nepenthes.hpp"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 
 extern "C" int ggml_nepenthes_trace_enabled(void);
