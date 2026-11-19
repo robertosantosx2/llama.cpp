@@ -71,5 +71,45 @@ int main() {
     std::remove(path.c_str());
     assert(count == 4260);
     assert(summary_seen);
+
+
+    // latency-critical retains only request lifecycle and clock calibration events.
+    const std::string latency_path = "nepenthes-jsonl-latency-critical.jsonl";
+    std::remove(latency_path.c_str());
+    {
+        nepenthes::JsonlSink sink(latency_path, "latency-critical", true);
+        nepenthes::emit(nepenthes::EventType::kernel, "cuda.kernel", 1, 2);
+        nepenthes::emit(nepenthes::EventType::transfer, "cuda.transfer", 1, 2);
+        nepenthes::emit(nepenthes::EventType::request_start, "request.start", 0, 0,
+                        nepenthes::phase_instant, 42, 0, 77);
+        nepenthes::emit(nepenthes::EventType::request_end, "request.end", 0, 0,
+                        nepenthes::phase_instant, 42, 0, 77);
+        sink.close();
+        assert(sink.dropped() == 0);
+        assert(sink.write_errors() == 0);
+    }
+    std::ifstream latency_input(latency_path);
+    assert(latency_input.good());
+    std::size_t latency_count = 0;
+    bool request_start_seen = false;
+    bool request_end_seen = false;
+    bool kernel_seen = false;
+    bool transfer_seen = false;
+    std::size_t calibration_count = 0;
+    while (std::getline(latency_input, line)) {
+        assert(!line.empty() && line.back() == '}');
+        request_start_seen |= line.find("\"event_kind\":\"request_start\"") != std::string::npos;
+        request_end_seen |= line.find("\"event_kind\":\"request_end\"") != std::string::npos;
+        kernel_seen |= line.find("\"event_kind\":\"kernel\"") != std::string::npos;
+        transfer_seen |= line.find("\"event_kind\":\"transfer\"") != std::string::npos;
+        calibration_count += line.find("\"event_kind\":\"clock_calibration\"") != std::string::npos;
+        ++latency_count;
+    }
+    latency_input.close();
+    std::remove(latency_path.c_str());
+    assert(request_start_seen && request_end_seen);
+    assert(!kernel_seen && !transfer_seen);
+    assert(calibration_count == 2);
+    assert(latency_count == 5); // 4 accepted events + sink summary
     return 0;
 }
