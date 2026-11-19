@@ -238,7 +238,7 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
                 static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
     } else {
         nepenthes::emit(nepenthes::EventType::error, "cuda.device_malloc",
-                static_cast<std::uint64_t>(err), static_cast<std::uint64_t>(device),
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
                 static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
     }
     return err;
@@ -760,7 +760,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
                             static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
                 } else if (err != CUDA_SUCCESS) {
                     nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_address_reserve",
-                            static_cast<std::uint64_t>(err), static_cast<std::uint64_t>(device),
+                            static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(err),
                             static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
                 }
                 CU_CHECK(err);
@@ -785,7 +785,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
                         static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
             } else if (create_result != CUDA_SUCCESS) {
                 nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_physical_alloc",
-                        static_cast<std::uint64_t>(create_result), static_cast<std::uint64_t>(device),
+                        static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(create_result),
                         static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
             } else {
                 nepenthes::emit(nepenthes::EventType::allocation, "cuda.vmm_physical_alloc",
