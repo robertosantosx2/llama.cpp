@@ -69,14 +69,20 @@ public:
                 std::uint64_t value0 = 0, std::uint64_t value1 = 0,
                 std::uint64_t request_id = 0) noexcept
         : type_(type), label_(label), value0_(value0), value1_(value1),
-          request_id_(request_id), start_ns_(now_ns()) {
-        emit(type_, label_, value0_, value1_, phase_begin, request_id_);
+          request_id_(request_id), enabled_(ggml_nepenthes_trace_enabled() != 0),
+          start_ns_(enabled_ ? now_ns() : 0) {
+        if (enabled_) {
+            emit(type_, label_, value0_, value1_, phase_begin, request_id_);
+        }
     }
 
     ScopedEvent(const ScopedEvent &) = delete;
     ScopedEvent & operator=(const ScopedEvent &) = delete;
 
     ~ScopedEvent() noexcept {
+        if (!enabled_) {
+            return;
+        }
         const std::uint64_t end_ns = now_ns();
         emit(type_, label_, value0_, value1_, phase_end, request_id_,
              end_ns >= start_ns_ ? end_ns - start_ns_ : 0);
@@ -88,6 +94,7 @@ private:
     std::uint64_t value0_;
     std::uint64_t value1_;
     std::uint64_t request_id_;
+    bool enabled_;
     std::uint64_t start_ns_;
 };
 
