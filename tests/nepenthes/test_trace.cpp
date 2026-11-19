@@ -32,10 +32,15 @@ static void blocking_collect(const nepenthes::Event &) noexcept {
 int main() {
     using namespace nepenthes;
 
+    assert(ggml_nepenthes_trace_enabled() == 0);
     emit(EventType::request_start, "disabled");
+    {
+        ScopedEvent disabled_scope(EventType::graph_compute, "disabled.scope");
+    }
     assert(seen == 0);
 
     set_sink(&collect);
+    assert(ggml_nepenthes_trace_enabled() == 1);
     emit(EventType::cache_hit, "expert", 7, 4096, flag_device, 42, 0, 777);
     assert(seen == 1);
     assert(last_flags == flag_device);
