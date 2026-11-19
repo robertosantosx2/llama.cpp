@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "src/nepenthes_trace.hpp"
+      - "src/nepenthes_jsonl_sink.hpp"
+      - "src/nepenthes_jsonl_sink.cpp"
+      - "src/llama-model-loader.cpp"
+      - "src/CMakeLists.txt"
       - "ggml/include/ggml-nepenthes.hpp"
       - "ggml/src/ggml-nepenthes.cpp"
       - "ggml/src/ggml-backend.cpp"
@@ -54,12 +58,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build libcurl4-openssl-dev pkg-config
       - name: Compile and run trace contract test
         run: |
-          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc -Iggml/include \
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc -Iggml/include -Iinclude \
             tests/nepenthes/test_trace.cpp ggml/src/ggml-nepenthes.cpp -o /tmp/nepenthes-trace-test
           /tmp/nepenthes-trace-test
       - name: Compile and run bounded JSONL sink test
         run: |
-          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc -Iggml/include \
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc -Iggml/include -Iinclude \
             tests/nepenthes/test_jsonl_sink.cpp ggml/src/ggml-nepenthes.cpp -o /tmp/nepenthes-jsonl-test
           /tmp/nepenthes-jsonl-test
       - name: Configure CPU llama-server
