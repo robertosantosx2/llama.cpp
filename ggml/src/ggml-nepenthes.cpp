@@ -61,18 +61,18 @@ void emit(EventType type, const char * label,
 } // namespace nepenthes
 
 
-extern "C" GGML_API int ggml_nepenthes_trace_enabled(void) {
+int ggml_nepenthes_trace_enabled(void) {
     return sink_slot().load(std::memory_order_acquire) != nullptr ? 1 : 0;
 }
 
-extern "C" GGML_API void ggml_nepenthes_emit_cpu_work(std::uint64_t worker_id,
+void ggml_nepenthes_emit_cpu_work(std::uint64_t worker_id,
                                                std::uint64_t node_count,
                                                std::uint64_t duration_ns) {
     nepenthes::emit(nepenthes::EventType::cpu_work, "cpu.worker_graph_compute",
             worker_id, node_count, nepenthes::phase_instant, 0, duration_ns);
 }
 
-extern "C" GGML_API void ggml_nepenthes_emit_cpu_wait(std::uint64_t worker_id,
+void ggml_nepenthes_emit_cpu_wait(std::uint64_t worker_id,
                                                std::uint64_t duration_ns) {
     nepenthes::emit(nepenthes::EventType::stall, "cpu.worker_wait",
             worker_id, 0, nepenthes::phase_instant, 0, duration_ns);
