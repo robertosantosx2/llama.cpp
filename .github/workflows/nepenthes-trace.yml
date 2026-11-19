@@ -11,6 +11,7 @@ on:
       - "src/CMakeLists.txt"
       - "ggml/include/ggml-nepenthes.hpp"
       - "ggml/src/ggml-nepenthes.cpp"
+      - "ggml/src/ggml-cpu/ggml-cpu.c"
       - "ggml/src/ggml-backend.cpp"
       - "ggml/src/ggml-cuda/ggml-cuda.cu"
       - "ggml/src/CMakeLists.txt"
@@ -72,6 +73,11 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc -Iggml/include -Iinclude \
             tests/nepenthes/test_jsonl_sink.cpp ggml/src/ggml-nepenthes.cpp -o /tmp/nepenthes-jsonl-test
           /tmp/nepenthes-jsonl-test
+      - name: Compile and run CPU worker bridge test
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Iggml/include -Iinclude \\
+            tests/nepenthes/test_cpu_bridge.cpp ggml/src/ggml-nepenthes.cpp -o /tmp/nepenthes-cpu-bridge-test
+          /tmp/nepenthes-cpu-bridge-test
       - name: Configure CPU llama-server
         run: |
           cmake -S . -B build-nepenthes -G Ninja \
