@@ -31,7 +31,8 @@ void set_sink(Sink sink) noexcept {
 void emit(EventType type, const char * label,
           std::uint64_t value0, std::uint64_t value1,
           std::uint16_t flags, std::uint64_t request_id,
-          std::uint64_t duration_ns, std::uint64_t correlation_token) noexcept {
+          std::uint64_t duration_ns, std::uint64_t correlation_token,
+          EventMetadata metadata) noexcept {
     const Sink sink = sink_slot().load(std::memory_order_acquire);
     if (sink == nullptr) {
         return;
@@ -58,6 +59,10 @@ void emit(EventType type, const char * label,
     event.value1 = value1;
     event.type = type;
     event.flags = flags;
+    if (correlation_token != 0 && metadata.attribution_level == AttributionLevel::unknown) {
+        metadata.attribution_level = AttributionLevel::exact;
+    }
+    event.metadata = metadata;
     event.label = label;
     sink(event);
 
@@ -75,11 +80,13 @@ void ggml_nepenthes_emit_cpu_work(std::uint64_t worker_id,
                                                std::uint64_t node_count,
                                                std::uint64_t duration_ns) {
     nepenthes::emit(nepenthes::EventType::cpu_work, "cpu.worker_graph_compute",
-            worker_id, node_count, nepenthes::phase_instant, 0, duration_ns);
+            worker_id, node_count, nepenthes::phase_instant, 0, duration_ns, 0,
+            nepenthes::cpu_metadata());
 }
 
 void ggml_nepenthes_emit_cpu_wait(std::uint64_t worker_id,
                                                std::uint64_t duration_ns) {
     nepenthes::emit(nepenthes::EventType::stall, "cpu.worker_wait",
-            worker_id, 0, nepenthes::phase_instant, 0, duration_ns);
+            worker_id, 0, nepenthes::phase_instant, 0, duration_ns, 0,
+            nepenthes::cpu_metadata());
 }
