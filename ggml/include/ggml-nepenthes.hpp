@@ -15,7 +15,7 @@ enum class EventType : std::uint8_t {
     model_load, model_unload,
     routing, cache_hit, cache_miss, eviction, prefetch,
     kv_cache, allocation, free_event, transfer, kernel,
-    sync, cpu_work, stall, oom, fallback, error, clock_calibration,
+    sync, cpu_work, stall, oom, fallback, error, clock_calibration, nvtx_marker,
 };
 
 enum EventFlags : std::uint16_t {
