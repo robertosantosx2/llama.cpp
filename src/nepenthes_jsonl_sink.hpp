@@ -120,6 +120,7 @@ private:
             case EventType::fallback: return "fallback";
             case EventType::error: return "error";
             case EventType::clock_calibration: return "clock_calibration";
+            case EventType::nvtx_marker: return "nvtx_marker";
         }
         return "error";
     }
