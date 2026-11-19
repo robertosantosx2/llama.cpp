@@ -1795,6 +1795,8 @@ static bool ggml_backend_buft_is_cuda_host(ggml_backend_buffer_type_t buft) {
 }
 
 static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    nepenthes::emit(nepenthes::EventType::free_event, "cuda.pinned_host.free",
+            static_cast<std::uint64_t>(buffer->size), 0, nepenthes::flag_host);
     CUDA_CHECK(cudaFreeHost(buffer->context));
 }
 
@@ -1806,6 +1808,9 @@ static void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
     cudaError_t err = cudaMallocHost((void **) &ptr, size);
     if (err != cudaSuccess) {
+        nepenthes::emit(nepenthes::EventType::error, "cuda.pinned_host.alloc",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
+                static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
         // clear the error
         (void)cudaGetLastError();
         GGML_LOG_DEBUG("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
@@ -1813,6 +1818,8 @@ static void * ggml_cuda_host_malloc(size_t size) {
         return nullptr;
     }
 
+    nepenthes::emit(nepenthes::EventType::allocation, "cuda.pinned_host.alloc",
+            static_cast<std::uint64_t>(size), 0, nepenthes::flag_host);
     return ptr;
 }
 
@@ -1820,6 +1827,9 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
     void * ptr = ggml_cuda_host_malloc(size);
 
     if (ptr == nullptr) {
+        nepenthes::emit(nepenthes::EventType::fallback, "cuda.pinned_host_to_cpu",
+                static_cast<std::uint64_t>(size), 0,
+                static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
         // fallback to cpu buffer
         return ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size);
     }
