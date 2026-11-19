@@ -568,6 +568,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
+                nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_release",
+                        static_cast<std::uint64_t>(b.size), static_cast<std::uint64_t>(device),
+                        nepenthes::flag_device);
                 CUDA_CHECK(cudaFree(b.ptr));
                 pool_size -= b.size;
                 b.ptr  = nullptr;
@@ -612,6 +615,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
                         if (!best_diff) {
                             void * ptr = b.ptr;
                             *actual_size = b.size;
+                            nepenthes::emit(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
+                                    static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(b.size),
+                                    nepenthes::flag_device);
                             b.ptr = nullptr;
                             b.size = 0;
                             return ptr;
@@ -624,6 +630,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
             ggml_cuda_buffer& b = buffer_pool[ibest];
             void * ptr = b.ptr;
             *actual_size = b.size;
+            nepenthes::emit(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
+                    static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(b.size),
+                    nepenthes::flag_device);
             b.ptr = nullptr;
             b.size = 0;
             return ptr;
@@ -660,6 +669,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
     }
 
     void free(void * ptr, size_t size) override {
+        nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_return",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                nepenthes::flag_device);
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer& b = buffer_pool[i];
             if (b.ptr == nullptr) {
@@ -670,6 +682,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         }
         GGML_LOG_DEBUG(GGML_CUDA_NAME " buffer pool full, increase MAX_CUDA_BUFFERS\n");
         ggml_cuda_set_device(device);
+        nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_release",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                nepenthes::flag_device);
         CUDA_CHECK(cudaFree(ptr));
         pool_size -= size;
         invalidate_cuda_graphs();
