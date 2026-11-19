@@ -669,12 +669,12 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
     }
 
     void free(void * ptr, size_t size) override {
-        nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_return",
-                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                nepenthes::flag_device);
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer& b = buffer_pool[i];
             if (b.ptr == nullptr) {
+                nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_return",
+                        static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                        nepenthes::flag_device);
                 b.ptr = ptr;
                 b.size = size;
                 return;
