@@ -16,6 +16,8 @@ int main() {
             nepenthes::emit(nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
                             nepenthes::phase_instant, 0, 0, i + 1);
         }
+        nepenthes::emit(nepenthes::EventType::nvtx_marker, "request.start", 100, 120,
+                        nepenthes::phase_begin, 42, 0, 999);
         std::vector<std::thread> producers;
         for (std::uint64_t t = 0; t < 4; ++t) {
             producers.emplace_back([t] {
@@ -49,13 +51,17 @@ int main() {
             assert(line.find("\"attribution_level\":\"exact\"") != std::string::npos);
             assert(line.find("\"clock_domain\":\"steady_clock\"") != std::string::npos);
         }
+        if (line.find("\"event_kind\":\"nvtx_marker\"") != std::string::npos) {
+            assert(line.find("\"correlation_token\":999") != std::string::npos);
+            assert(line.find("\"attribution_level\":\"exact\"") != std::string::npos);
+        }
         if (line.find("\"event_kind\":\"clock_calibration\"") != std::string::npos) {
             assert(line.find("\"timestamp_unix_ns\":") != std::string::npos);
             assert(line.find("\"monotonic_ns\":") != std::string::npos);
         }
         if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
             summary_seen = true;
-            assert(line.find("\"events_drained\":4258") != std::string::npos);
+            assert(line.find("\"events_drained\":4259") != std::string::npos);
             assert(line.find("\"dropped_events\":0") != std::string::npos);
             assert(line.find("\"write_errors\":0") != std::string::npos);
         }
@@ -63,7 +69,7 @@ int main() {
     }
     input.close();
     std::remove(path.c_str());
-    assert(count == 4259);
+    assert(count == 4260);
     assert(summary_seen);
     return 0;
 }
