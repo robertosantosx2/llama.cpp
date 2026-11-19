@@ -26,6 +26,7 @@ on:
     branches: [master]
     paths:
       - "src/nepenthes_trace.hpp"
+      - "src/llama-model.cpp"
       - "src/nepenthes_jsonl_sink.hpp"
       - "src/nepenthes_jsonl_sink.cpp"
       - "src/llama-model-loader.cpp"
