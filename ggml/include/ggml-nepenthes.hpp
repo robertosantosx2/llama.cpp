@@ -45,7 +45,7 @@ struct EventMetadata {
     SyncType sync_type = SyncType::unknown;
     KvOp kv_op = KvOp::unknown;
     AttributionLevel attribution_level = AttributionLevel::unknown;
-    std::uint32_t raw_memcpy_kind = UINT32_MAX;
+    std::uint32_t raw_memcpy_kind = 0xffffffffu;
 };
 
 struct Event {
@@ -78,13 +78,19 @@ GGML_API void emit(EventType type, const char * label = nullptr,
 inline EventMetadata cuda_metadata(MemoryKind memory = MemoryKind::unknown,
                                    MemcpyKind copy = MemcpyKind::unknown,
                                    SyncType sync = SyncType::unknown,
-                                   std::uint32_t raw_copy = UINT32_MAX) noexcept {
+                                   std::uint32_t raw_copy = 0xffffffffu) noexcept {
     EventMetadata metadata;
     metadata.backend = Backend::cuda;
     metadata.memory_kind = memory;
     metadata.memcpy_kind = copy;
     metadata.sync_type = sync;
     metadata.raw_memcpy_kind = raw_copy;
+    return metadata;
+}
+
+inline EventMetadata cpu_metadata() noexcept {
+    EventMetadata metadata;
+    metadata.backend = Backend::cpu;
     return metadata;
 }
 
