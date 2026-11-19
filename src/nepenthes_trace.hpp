@@ -1,6 +1,6 @@
 #pragma once
 
-// NEPENTHES observability hook for tandem.cpp / llama.cpp.
+// NEPENTHES observability hook for llama.cpp.
 // C++17, header-only, no heap allocation on the emit path.
 //
 // The sink must be installed before worker threads start and removed only
