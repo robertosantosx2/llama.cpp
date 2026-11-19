@@ -15,6 +15,7 @@ set(LLAMA_CORE_SOURCES
     llama-batch.cpp
     llama-chat.cpp
     llama-context.cpp
+    nepenthes_jsonl_sink.cpp
     llama-cparams.cpp
     llama-grammar.cpp
     llama-graph.cpp
