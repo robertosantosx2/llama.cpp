@@ -1,6 +1,7 @@
 #include "ggml-cuda.h"
 #include "ggml-impl.h"
 #include "ggml-backend-impl.h"
+#include "ggml-nepenthes.hpp"
 
 #include "ggml-cuda/allreduce.cuh"
 #include "ggml-cuda/common.cuh"
@@ -211,6 +212,9 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
 
         // fall back to cudaMalloc if not supported (e.g. on Windows)
         if (err == hipErrorNotSupported) {
+            nepenthes::emit(nepenthes::EventType::fallback, "cuda.managed_to_device_malloc",
+                    static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                    nepenthes::flag_device);
             static bool warned_unsupported = false;
             if (!warned_unsupported) {
                 GGML_LOG_WARN("hipMallocManaged unsupported, falling back to hipMalloc.\n");
@@ -222,6 +226,20 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
 #endif // defined(GGML_USE_HIP)
     } else {
         err = cudaMalloc(ptr, size);
+    }
+
+    if (err == cudaSuccess) {
+        nepenthes::emit(nepenthes::EventType::allocation, "cuda.device_malloc",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                nepenthes::flag_device);
+    } else if (err == cudaErrorMemoryAllocation) {
+        nepenthes::emit(nepenthes::EventType::oom, "cuda.device_malloc",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+    } else {
+        nepenthes::emit(nepenthes::EventType::error, "cuda.device_malloc",
+                static_cast<std::uint64_t>(err), static_cast<std::uint64_t>(device),
+                static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
     }
     return err;
 }
@@ -616,6 +634,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         ggml_cuda_set_device(device);
         cudaError_t err = ggml_cuda_device_malloc(&ptr, look_ahead_size, device);
         if (err == cudaErrorMemoryAllocation) {
+            nepenthes::emit(nepenthes::EventType::fallback, "cuda.pool_oom_flush_retry",
+                    static_cast<std::uint64_t>(look_ahead_size), static_cast<std::uint64_t>(device),
+                    nepenthes::flag_device);
             (void)cudaGetLastError();
             const size_t cached_bytes = pool_size;
             GGML_LOG_DEBUG(GGML_CUDA_NAME " pool[%d]: alloc of %.2f MiB failed, flushing %.2f MiB of cached buffers and retrying\n",
