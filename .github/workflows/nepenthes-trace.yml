@@ -117,5 +117,10 @@ jobs:
             -DLLAMA_CURL=OFF \
             -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
             -DCMAKE_BUILD_TYPE=Release
+      - name: Verify NVTX v3 is enabled for CUDA request markers
+        run: |
+          grep -q '^NEPENTHES_NVTX_INCLUDE_DIR:PATH=' build-nepenthes-cuda/CMakeCache.txt
+          NVTX_INCLUDE_DIR="$(sed -n 's/^NEPENTHES_NVTX_INCLUDE_DIR:PATH=//p' build-nepenthes-cuda/CMakeCache.txt)"
+          test -f "$NVTX_INCLUDE_DIR/nvtx3/nvToolsExt.h"
       - name: Build CUDA llama-server
         run: cmake --build build-nepenthes-cuda --target llama-server --parallel 2
