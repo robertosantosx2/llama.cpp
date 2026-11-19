@@ -9,6 +9,8 @@
 static std::uint64_t seen = 0;
 static std::uint64_t last_duration = 0;
 static std::uint16_t last_flags = 0;
+static std::uint64_t last_correlation_token = 0;
+static std::uint64_t last_wall_ns = 0;
 static std::atomic<bool> callback_entered{false};
 static std::atomic<bool> release_callback{false};
 
@@ -16,6 +18,8 @@ static void collect(const nepenthes::Event & event) noexcept {
     ++seen;
     last_duration = event.duration_ns;
     last_flags = event.flags;
+    last_correlation_token = event.correlation_token;
+    last_wall_ns = event.timestamp_unix_ns;
 }
 
 static void blocking_collect(const nepenthes::Event &) noexcept {
@@ -32,9 +36,14 @@ int main() {
     assert(seen == 0);
 
     set_sink(&collect);
-    emit(EventType::cache_hit, "expert", 7, 4096, flag_device, 42);
+    emit(EventType::cache_hit, "expert", 7, 4096, flag_device, 42, 0, 777);
     assert(seen == 1);
     assert(last_flags == flag_device);
+    assert(last_correlation_token == 777);
+    assert(last_wall_ns > 0);
+    const auto token_a = next_correlation_token();
+    const auto token_b = next_correlation_token();
+    assert(token_a != 0 && token_b == token_a + 1);
 
     {
         ScopedEvent phase(EventType::sync, "worker_wait", 3, 0, 42);
