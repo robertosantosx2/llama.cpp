@@ -28,7 +28,7 @@ class JsonlSink final {
     };
 
 public:
-    explicit JsonlSink(const std::string & path, std::string run_id = "tandem")
+    explicit JsonlSink(const std::string & path, std::string run_id = "llama.cpp")
         : run_id_json_(escape_json(run_id)),
           output_(path, std::ios::out | std::ios::app) {
         for (std::size_t i = 0; i < capacity; ++i) {
