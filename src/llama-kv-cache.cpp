@@ -594,6 +594,8 @@ void llama_kv_cache::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_id_dst, ll
 }
 
 void llama_kv_cache::seq_keep(llama_seq_id seq_id) {
+    nepenthes::ScopedEvent nepenthes_kv_keep(nepenthes::EventType::kv_cache, "kv.seq_keep",
+            static_cast<std::uint64_t>(seq_id));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return;
@@ -621,6 +623,8 @@ void llama_kv_cache::seq_keep(llama_seq_id seq_id) {
 }
 
 void llama_kv_cache::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos shift) {
+    nepenthes::ScopedEvent nepenthes_kv_add(nepenthes::EventType::kv_cache, "kv.seq_add",
+            static_cast<std::uint64_t>(seq_id), static_cast<std::uint64_t>(shift));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return;
@@ -671,6 +675,8 @@ void llama_kv_cache::seq_add(llama_seq_id seq_id, llama_pos p0, llama_pos p1, ll
 }
 
 void llama_kv_cache::seq_div(llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+    nepenthes::ScopedEvent nepenthes_kv_div(nepenthes::EventType::kv_cache, "kv.seq_div",
+            static_cast<std::uint64_t>(seq_id), static_cast<std::uint64_t>(d));
     // TODO: refactor [TAG_KV_CACHE_SHARE_CELLS]
     if (other) {
         return;
@@ -793,6 +799,8 @@ llama_memory_context_ptr llama_kv_cache::init_update(llama_context * lctx, bool 
 }
 
 llama_kv_cache::slot_info_vec_t llama_kv_cache::prepare(const std::vector<llama_ubatch> & ubatches) {
+    nepenthes::ScopedEvent nepenthes_kv_prepare(nepenthes::EventType::kv_cache, "kv.prepare",
+            static_cast<std::uint64_t>(ubatches.size()));
     llama_kv_cache::slot_info_vec_t res;
 
     struct state_t {
