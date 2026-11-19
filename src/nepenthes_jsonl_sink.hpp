@@ -173,7 +173,7 @@ private:
             const auto id = next_id_.fetch_add(1, std::memory_order_relaxed);
             output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
                     << "\",\"event_id\":\"llama-" << id
-                    << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << wall_ns
+                    << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << event.timestamp_unix_ns
                     << ",\"monotonic_ns\":" << event.monotonic_ns
                     << ",\"request_id\":" << event.request_id
                     << ",\"correlation_token\":";
