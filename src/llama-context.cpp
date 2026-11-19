@@ -176,6 +176,7 @@ llama_context::llama_context(
     // MTP uses the embd input for the hidden state
     balloc(std::make_unique<llama_batch_allocr>(model.hparams.n_pos_per_embd(),
                 llm_arch_supports_mixed_batch(model.arch) && params.ctx_type == LLAMA_CONTEXT_TYPE_DEFAULT)) {
+    nepenthes::ensure_sink_from_env();
     // TODO warning when creating llama_context with awkward ctx size that is not a power of 2,
     //     may need to be backend-dependent
     LLAMA_LOG_INFO("%s: constructing llama_context\n", __func__);
@@ -3143,7 +3144,6 @@ void llama_context::sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph 
 ggml_status llama_context::graph_compute(
             ggml_cgraph * gf,
                    bool   batched) {
-    nepenthes::ensure_sink_from_env();
     nepenthes::ScopedEvent nepenthes_graph(nepenthes::EventType::graph_compute, "llama.graph_compute", static_cast<std::uint64_t>(ggml_graph_n_nodes(gf)), batched ? 1 : 0);
     int n_threads        = batched ? cparams.n_threads_batch : cparams.n_threads;
     ggml_threadpool_t tp = batched ? threadpool_batch        : threadpool;
