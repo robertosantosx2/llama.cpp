@@ -65,7 +65,9 @@ jobs:
           for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
             if [ -f "$source" ]; then
               sudo sed -i -e 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' \
-                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' "$source"
+                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' \
+                -e 's|http://azure.archive.ubuntu.com|https://azure.archive.ubuntu.com|g' \
+                -e 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' "$source"
             fi
           done
           sudo apt-get -o Acquire::Retries=3 update
@@ -107,7 +109,9 @@ jobs:
           for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
             if [ -f "$source" ]; then
               sed -i -e 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' \
-                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' "$source"
+                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' \
+                -e 's|http://azure.archive.ubuntu.com|https://azure.archive.ubuntu.com|g' \
+                -e 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' "$source"
             fi
           done
           apt-get -o Acquire::Retries=3 update
