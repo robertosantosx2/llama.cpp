@@ -42,6 +42,7 @@ public:
         writer_ = std::thread([this] { drain(); });
         active_.store(this, std::memory_order_release);
         set_sink(&JsonlSink::callback);
+        emit(EventType::clock_calibration, "clock.calibration.start");
     }
 
     JsonlSink(const JsonlSink &) = delete;
@@ -51,6 +52,7 @@ public:
     void close() noexcept {
         bool expected = false;
         if (!closed_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) return;
+        emit(EventType::clock_calibration, "clock.calibration.end");
         set_sink(nullptr);
         active_.store(nullptr, std::memory_order_release);
         running_.store(false, std::memory_order_release);
@@ -117,6 +119,8 @@ private:
             case EventType::oom: return "oom";
             case EventType::fallback: return "fallback";
             case EventType::error: return "error";
+            case EventType::dispatch: return "dispatch";
+            case EventType::clock_calibration: return "clock_calibration";
         }
         return "error";
     }
@@ -167,14 +171,19 @@ private:
                 std::this_thread::sleep_for(std::chrono::microseconds(250));
                 continue;
             }
-            const auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
             const auto id = next_id_.fetch_add(1, std::memory_order_relaxed);
             output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
                     << "\",\"event_id\":\"llama-" << id
                     << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << wall_ns
                     << ",\"monotonic_ns\":" << event.monotonic_ns
                     << ",\"request_id\":" << event.request_id
+                    << ",\"correlation_token\":";
+            if (event.correlation_token == 0) output_ << "null";
+            else output_ << event.correlation_token;
+            output_ << ",\"attribution_level\":";
+            if (event.correlation_token == 0) output_ << "null";
+            else output_ << "\"exact\"";
+            output_ << ",\"clock_domain\":\"steady_clock\""
                     << ",\"event_kind\":\"" << type_name(event.type)
                     << "\",\"label\":\"" << escape_json(event.label ? event.label : "")
                     << "\",\"value0\":" << event.value0
