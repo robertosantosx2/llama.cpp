@@ -78,3 +78,5 @@ The shared event API now lives in ggml-base so llama and backend translation uni
 Interpretation is deliberately layered: a generic ggml buffer event is not the same as a physical CUDA allocation. Pool-return/free events distinguish logical reuse from a physical cudaFree/unmap. Async transfer events measure host submission, while the synchronous buffer-interface events include the explicit stream synchronization in those callsites. CUDA op dispatch is host dispatch time, not GPU kernel duration.
 
 The CUDA CI job compiles the backend for compute capability 8.6 using a CUDA development container. It does not require a GPU and does not validate runtime behavior on the MSI. Nsight Systems/CUPTI remain the source for device-side kernel timing and transfer completion.
+
+- Model lifecycle: `model_load` spans tensor setup and weight loading; `model_unload` records model byte/element metadata at destruction. The sink is initialized from the model-loader constructor so allocation/loading events are not missed.
