@@ -1,0 +1,39 @@
+name: NEPENTHES upstream rebase experiment
+
+on:
+  push:
+    branches:
+      - automation/nepenthes-rebase-upstream-c406f436
+
+permissions:
+  contents: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout automation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Rebase RC1 onto current upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/ggml-org/llama.cpp.git
+          git fetch upstream master
+          git fetch origin nepenthes/rc1-upstream-c7468107
+          git checkout -B nepenthes/rebased-c406f436 FETCH_HEAD
+          if ! git rebase upstream/master; then
+            echo "::error::Rebase conflict; candidate branch was not pushed."
+            git status --short
+            git rebase --abort || true
+            exit 1
+          fi
+          git push origin HEAD:refs/heads/nepenthes/rc1-rebased-c406f436
+          echo "Rebased HEAD: $(git rev-parse HEAD)"
+          echo "Upstream HEAD: $(git rev-parse upstream/master)"
