@@ -113,8 +113,8 @@ static constexpr nepenthes::Backend nepenthes_gpu_backend_kind() noexcept {
 #endif
 }
 
-#define NEPENTHES_EMIT_GPU(...) NEPENTHES_EMIT_GPU(nepenthes_gpu_backend_kind(), __VA_ARGS__)
-#define NEPENTHES_GPU_METADATA(...) NEPENTHES_GPU_METADATA(nepenthes_gpu_backend_kind(), __VA_ARGS__)
+#define NEPENTHES_EMIT_GPU(...) nepenthes::emit_gpu(nepenthes_gpu_backend_kind(), __VA_ARGS__)
+#define NEPENTHES_GPU_METADATA(...) nepenthes::gpu_metadata(nepenthes_gpu_backend_kind(), __VA_ARGS__)
 
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
