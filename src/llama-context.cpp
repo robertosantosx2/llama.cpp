@@ -10,6 +10,7 @@
 #include "llama-mmap.h"
 #include "llama-model.h"
 #include "llama-moe-cache.h"
+#include "nepenthes_jsonl_sink.hpp"
 #include "llama-ext.h"
 #include "llama-sampler.h"
 #include "llama.h"
@@ -962,6 +963,7 @@ void llama_context::sched_reserve() {
 }
 
 void llama_context::synchronize() {
+    nepenthes::ScopedEvent nepenthes_sync(nepenthes::EventType::sync, "llama.context_synchronize");
     if (!sched) {
         return;
     }
@@ -3141,6 +3143,8 @@ void llama_context::sched_graph_realloc(ggml_backend_sched_t sched, ggml_cgraph 
 ggml_status llama_context::graph_compute(
             ggml_cgraph * gf,
                    bool   batched) {
+    nepenthes::ensure_sink_from_env();
+    nepenthes::ScopedEvent nepenthes_graph(nepenthes::EventType::graph_compute, "llama.graph_compute", static_cast<std::uint64_t>(ggml_graph_n_nodes(gf)), batched ? 1 : 0);
     int n_threads        = batched ? cparams.n_threads_batch : cparams.n_threads;
     ggml_threadpool_t tp = batched ? threadpool_batch        : threadpool;
 
