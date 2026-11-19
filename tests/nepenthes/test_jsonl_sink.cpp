@@ -35,6 +35,7 @@ int main() {
     assert(input.good());
     std::string line;
     std::size_t count = 0;
+    bool summary_seen = false;
     while (std::getline(input, line)) {
         // Every record must occupy one physical line and end with its JSON brace.
         // This catches a literal backslash+n being written instead of a newline.
@@ -45,10 +46,17 @@ int main() {
         if (count < 256) {
             assert(line.find("\"event_kind\":\"kernel\"") != std::string::npos);
         }
+        if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
+            summary_seen = true;
+            assert(line.find("\"events_drained\":4256") != std::string::npos);
+            assert(line.find("\"dropped_events\":0") != std::string::npos);
+            assert(line.find("\"write_errors\":0") != std::string::npos);
+        }
         ++count;
     }
     input.close();
     std::remove(path.c_str());
-    assert(count == 4256);
+    assert(count == 4257);
+    assert(summary_seen);
     return 0;
 }
