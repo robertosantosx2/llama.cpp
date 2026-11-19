@@ -76,7 +76,7 @@ jobs:
           /tmp/nepenthes-jsonl-test
       - name: Compile and run CPU worker bridge test
         run: |
-          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Iggml/include -Iinclude \\
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Iggml/include -Iinclude \
             tests/nepenthes/test_cpu_bridge.cpp ggml/src/ggml-nepenthes.cpp -o /tmp/nepenthes-cpu-bridge-test
           /tmp/nepenthes-cpu-bridge-test
       - name: Configure CPU llama-server
