@@ -12,6 +12,7 @@
 #include "ggml-backend-impl.h"
 #include "ggml-alloc.h"
 #include "ggml-impl.h"
+#include "ggml-nepenthes.hpp"
 
 #include <assert.h>
 #include <limits.h>
@@ -246,6 +247,9 @@ ggml_backend_buffer_t ggml_backend_buffer_init(
         /* .usage     = */ GGML_BACKEND_BUFFER_USAGE_ANY
     };
 
+    nepenthes::emit(nepenthes::EventType::allocation, "ggml.backend_buffer.alloc",
+            static_cast<std::uint64_t>(size));
+
     return buffer;
 }
 
@@ -257,6 +261,9 @@ void ggml_backend_buffer_free(ggml_backend_buffer_t buffer) {
     if (buffer == NULL) {
         return;
     }
+
+    nepenthes::emit(nepenthes::EventType::free_event, "ggml.backend_buffer.free",
+            static_cast<std::uint64_t>(buffer->size));
 
     if (buffer->iface.free_buffer != NULL) {
         buffer->iface.free_buffer(buffer);
@@ -2584,7 +2591,6 @@ bool ggml_op_alloc_size_may_expand(enum ggml_op op) {
         case GGML_OP_ARGSORT:
         case GGML_OP_TOP_K:
         case GGML_OP_ARGMAX:
-        case GGML_OP_CONV_2D:
             return true;
         default:
             return false;
