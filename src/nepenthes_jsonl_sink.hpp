@@ -119,7 +119,6 @@ private:
             case EventType::oom: return "oom";
             case EventType::fallback: return "fallback";
             case EventType::error: return "error";
-            case EventType::dispatch: return "dispatch";
             case EventType::clock_calibration: return "clock_calibration";
         }
         return "error";
