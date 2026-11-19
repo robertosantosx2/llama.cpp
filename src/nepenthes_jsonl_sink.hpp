@@ -97,6 +97,7 @@ private:
             case EventType::request_start: return "request_start";
             case EventType::request_end: return "request_end";
             case EventType::graph_compute: return "graph_compute";
+            case EventType::dispatch: return "dispatch";
             case EventType::model_load: return "model_load";
             case EventType::model_unload: return "model_unload";
             case EventType::routing: return "routing";
