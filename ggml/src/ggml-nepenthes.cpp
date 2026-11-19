@@ -31,7 +31,7 @@ void set_sink(Sink sink) noexcept {
 void emit(EventType type, const char * label,
           std::uint64_t value0, std::uint64_t value1,
           std::uint16_t flags, std::uint64_t request_id,
-          std::uint64_t duration_ns) noexcept {
+          std::uint64_t duration_ns, std::uint64_t correlation_token) noexcept {
     const Sink sink = sink_slot().load(std::memory_order_acquire);
     if (sink == nullptr) {
         return;
@@ -46,8 +46,12 @@ void emit(EventType type, const char * label,
 
     Event event;
     event.monotonic_ns = now_ns();
+    event.timestamp_unix_ns = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count());
     event.duration_ns = duration_ns;
     event.request_id = request_id;
+    event.correlation_token = correlation_token;
     event.value0 = value0;
     event.value1 = value1;
     event.type = type;
