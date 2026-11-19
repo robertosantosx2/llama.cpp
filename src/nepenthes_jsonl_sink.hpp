@@ -291,12 +291,22 @@ private:
         const auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         const auto summary_id = next_id_.fetch_add(1, std::memory_order_relaxed);
+        const auto summary_monotonic_ns = now_ns();
+        const auto dropped = dropped_.load(std::memory_order_relaxed);
+        const auto errors = write_errors_.load(std::memory_order_relaxed);
         output_ << "{\"schema_version\":\"1.1\",\"run_id\":\"" << run_id_json_
                 << "\",\"event_id\":\"llama-" << summary_id
                 << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << wall_ns
-                << ",\"event_kind\":\"sink_summary\",\"events_drained\":" << (summary_id - 1)
-                << ",\"dropped_events\":" << dropped_.load(std::memory_order_relaxed)
-                << ",\"write_errors\":" << write_errors_.load(std::memory_order_relaxed) << "}\n";
+                << ",\"monotonic_ns\":" << summary_monotonic_ns
+                << ",\"request_id\":0,\"correlation_token\":null,\"attribution_level\":null"
+                << ",\"backend\":null,\"memory_kind\":null,\"memcpy_kind\":null,\"raw_memcpy_kind\":null"
+                << ",\"sync_type\":null,\"kv_op\":null,\"clock_domain\":\"steady_clock\""
+                << ",\"event_kind\":\"sink_summary\",\"label\":\"sink.summary\""
+                << ",\"value0\":" << (summary_id - 1) << ",\"value1\":" << dropped
+                << ",\"duration_ns\":0,\"flags\":0"
+                << ",\"events_drained\":" << (summary_id - 1)
+                << ",\"dropped_events\":" << dropped
+                << ",\"write_errors\":" << errors << "}\n";
         output_.flush();
         if (!output_) write_errors_.fetch_add(1, std::memory_order_relaxed);
     }
