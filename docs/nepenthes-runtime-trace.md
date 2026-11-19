@@ -92,3 +92,12 @@ The CPU backend now emits two additional event classes through a small C ABI bri
 When tracing is disabled, the worker checks the shared enabled flag and skips the clock reads and event bridge. These events use request_id=0 because the CPU worker pool has no safe request-scoped identity propagation at this layer.
 
 No generic CPU expert-prefetch worker is present in this upstream llama.cpp path; NEPENTHES does not fabricate prefetch events. Model-specific MoE CPU fallback scheduling remains reported by the MoE planner events. This slice does not instrument every CPU operator or every barrier individually, avoiding a high-frequency event flood.
+
+
+## Explicit request correlation and clock calibration (follow-up)
+
+The server assigns a process-monotonic `correlation_token` to each accepted slot task and emits the same token on its `request_start` and `request_end` records. The native server `request_id` remains unchanged. Tokens are opaque unsigned 64-bit values, unique within one process lifetime; they are not UUIDs and must be scoped by `run_id`.
+
+The JSONL sink emits `clock_calibration` records at sink start and shutdown. Each event captures `monotonic_ns` and `timestamp_unix_ns` at the producer callsite, not when the writer thread later drains the queue, so queue delay no longer contaminates the host clock pair. `clock_domain` is `steady_clock`. The importer must retain both values and estimate offset/drift from start/end calibration records; these host-only records do not calibrate the Nsight clock.
+
+`attribution_level=exact` on a record means that record itself carries the explicit request token. Events without a token emit null attribution. This slice deliberately does **not** propagate one request token into shared graph/CPU/GPU work: llama.cpp can batch multiple slots into one graph, so assigning one slot token to that graph would be false attribution. NVTX/CUPTI external-correlation markers and verified Nsight round-trip remain C07 work; no kernel attribution is claimed yet.
