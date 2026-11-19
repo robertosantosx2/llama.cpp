@@ -62,7 +62,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
-          sudo apt-get update
+          for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
+            if [ -f "$source" ]; then
+              sudo sed -i -e 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' \
+                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' "$source"
+            fi
+          done
+          sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build libcurl4-openssl-dev pkg-config
       - name: Compile and run trace contract test
         run: |
@@ -98,7 +104,13 @@ jobs:
     steps:
       - name: Install build dependencies
         run: |
-          apt-get update
+          for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
+            if [ -f "$source" ]; then
+              sed -i -e 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' \
+                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' "$source"
+            fi
+          done
+          apt-get -o Acquire::Retries=3 update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake git libcurl4-openssl-dev pkg-config
       - uses: actions/checkout@v4
