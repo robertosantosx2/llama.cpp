@@ -54,6 +54,10 @@
 
 static void nepenthes_nvtx_request_marker(const char * phase, std::uint64_t token,
                                           std::uint64_t request_id, std::uint16_t flags) noexcept {
+    // NVTX is part of the opt-in trace path; never perturb normal CUDA requests.
+    if (!ggml_nepenthes_trace_enabled()) {
+        return;
+    }
     const char * profile = std::getenv("NEPENTHES_PROFILE");
     if (profile != nullptr && std::strcmp(profile, "latency-critical") == 0) {
         return; // Request JSONL markers remain; NVTX calls are disabled in the low-overhead profile.
