@@ -46,9 +46,11 @@ void emit(EventType type, const char * label,
 
     Event event;
     event.monotonic_ns = now_ns();
-    event.timestamp_unix_ns = static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count());
+    if (type == EventType::clock_calibration || correlation_token != 0) {
+        event.timestamp_unix_ns = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count());
+    }
     event.duration_ns = duration_ns;
     event.request_id = request_id;
     event.correlation_token = correlation_token;
