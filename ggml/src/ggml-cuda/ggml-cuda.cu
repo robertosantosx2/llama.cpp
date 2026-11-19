@@ -736,7 +736,8 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         const size_t alignment = 128;
         size = alignment * ((size + alignment - 1) / alignment);
         nepenthes::ScopedEvent nepenthes_vmm_alloc(nepenthes::EventType::allocation, "cuda.vmm_pool_alloc",
-                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device));
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device), 0,
+                nepenthes::cuda_metadata(nepenthes::MemoryKind::vmm));
 
         size_t avail = pool_size - pool_used;
 
@@ -1264,7 +1265,9 @@ static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, co
         const int dst_physical = ggml_cuda_get_physical_device(dst_ctx->device);
         nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_attempt",
                 static_cast<std::uint64_t>(ggml_nbytes(src)),
-                static_cast<std::uint64_t>(src_physical == dst_physical ? 0 : 1));
+                static_cast<std::uint64_t>(src_physical == dst_physical ? 0 : 1), 0,
+                nepenthes::cuda_metadata(nepenthes::MemoryKind::device,
+                        src_physical == dst_physical ? nepenthes::MemcpyKind::device_to_device : nepenthes::MemcpyKind::peer_to_peer));
         if (src_physical == dst_physical) {
             CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(src), cudaMemcpyDeviceToDevice, cudaStreamPerThread));
         } else {
@@ -1285,7 +1288,8 @@ static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, co
 static bool ggml_backend_cuda_buffer_cpy_tensor_n(ggml_backend_buffer_t buffer, const struct ggml_tensor * const * srcs, struct ggml_tensor * const * dsts, size_t n_tensors) {
     ggml_backend_cuda_buffer_context * dst_ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_batch",
-            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(dst_ctx->device));
+            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(dst_ctx->device), 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_device));
 
     for (size_t i = 0; i < n_tensors; i++) {
         ggml_backend_buffer_t src_buf = srcs[i]->view_src ? srcs[i]->view_src->buffer : srcs[i]->buffer;
@@ -2918,7 +2922,8 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
 static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct ggml_tensor * dst) {
     nepenthes::ScopedEvent nepenthes_dispatch(nepenthes::EventType::dispatch, "cuda.op_dispatch",
-            static_cast<std::uint64_t>(dst->op), static_cast<std::uint64_t>(ggml_nelements(dst)));
+            static_cast<std::uint64_t>(dst->op), static_cast<std::uint64_t>(ggml_nelements(dst)), 0,
+            nepenthes::cuda_metadata());
     switch (dst->op) {
         case GGML_OP_ARGMAX:
             ggml_cuda_argmax(ctx, dst);
@@ -3308,7 +3313,9 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.h2d_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device), 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyHostToDevice)));
     CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cuda_ctx->stream()));
 }
 
@@ -3319,7 +3326,9 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggm
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.d2h_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device), 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyDeviceToHost)));
     CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
 }
 
@@ -3331,7 +3340,9 @@ static void ggml_backend_cuda_set_tensor_2d_async(ggml_backend_t backend, struct
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy2d.h2d_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies), 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyHostToDevice)));
     CUDA_CHECK(cudaMemcpy2DAsync(
         (char *) tensor->data + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cuda_ctx->stream()));
 }
@@ -3344,7 +3355,9 @@ static void ggml_backend_cuda_get_tensor_2d_async(ggml_backend_t backend, const 
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy2d.d2h_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies), 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyDeviceToHost)));
     CUDA_CHECK(cudaMemcpy2DAsync(
         data, stride_data, (const char *) tensor->data + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
 }
@@ -3377,7 +3390,9 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_async_attempt",
             static_cast<std::uint64_t>(ggml_nbytes(dst)),
-            static_cast<std::uint64_t>(backend_src != backend_dst ? 1 : 0));
+            static_cast<std::uint64_t>(backend_src != backend_dst ? 1 : 0), 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::device,
+                    backend_src != backend_dst ? nepenthes::MemcpyKind::peer_to_peer : nepenthes::MemcpyKind::device_to_device));
 
     if (backend_src != backend_dst) {
         // copy on src stream
@@ -3415,7 +3430,9 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
 static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
     nepenthes::ScopedEvent nepenthes_sync(nepenthes::EventType::sync, "cuda.stream_synchronize",
-            static_cast<std::uint64_t>(cuda_ctx->device));
+            static_cast<std::uint64_t>(cuda_ctx->device), 0, 0,
+            nepenthes::cuda_metadata(nepenthes::MemoryKind::unknown, nepenthes::MemcpyKind::unknown,
+                    nepenthes::SyncType::stream));
 
     CUDA_CHECK(cudaStreamSynchronize(cuda_ctx->stream()));
 
