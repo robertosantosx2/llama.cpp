@@ -715,6 +715,9 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
 
     ~ggml_cuda_pool_vmm() {
         if (pool_addr != 0) {
+            nepenthes::emit(nepenthes::EventType::free_event, "cuda.vmm_pool_destroy",
+                    static_cast<std::uint64_t>(pool_size), static_cast<std::uint64_t>(device),
+                    nepenthes::flag_device);
 #if defined(GGML_USE_HIP)
             // Workaround for https://github.com/ROCm/ROCR-Runtime/issues/285
             for (std::pair<CUdeviceptr, size_t> & mapping : mappings) {
@@ -731,6 +734,8 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         // round up the allocation size to the alignment to ensure that all allocations are aligned for all data types
         const size_t alignment = 128;
         size = alignment * ((size + alignment - 1) / alignment);
+        nepenthes::ScopedEvent nepenthes_vmm_alloc(nepenthes::EventType::allocation, "cuda.vmm_pool_alloc",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device));
 
         size_t avail = pool_size - pool_used;
 
@@ -761,7 +766,21 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
             prop.location.id = physical_device;
             CUmemGenericAllocationHandle handle;
-            CU_CHECK(cuMemCreate(&handle, reserve_size, &prop, 0));
+            const CUresult create_result = cuMemCreate(&handle, reserve_size, &prop, 0);
+            if (create_result == CUDA_ERROR_OUT_OF_MEMORY) {
+                nepenthes::emit(nepenthes::EventType::oom, "cuda.vmm_physical_alloc",
+                        static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(device),
+                        static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+            } else if (create_result != CUDA_SUCCESS) {
+                nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_physical_alloc",
+                        static_cast<std::uint64_t>(create_result), static_cast<std::uint64_t>(device),
+                        static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+            } else {
+                nepenthes::emit(nepenthes::EventType::allocation, "cuda.vmm_physical_alloc",
+                        static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(device),
+                        nepenthes::flag_device);
+            }
+            CU_CHECK(create_result);
 
             // map at the end of the pool
             CUdeviceptr start_ptr = (CUdeviceptr)((char *)(pool_addr) + pool_size);
@@ -840,6 +859,9 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
     }
 
     void free(void * ptr, size_t size) override {
+        nepenthes::emit(nepenthes::EventType::free_event, "cuda.vmm_pool_free",
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
+                nepenthes::flag_device);
 #ifdef DEBUG_CUDA_MALLOC
         printf("cuda pool[%d]: freed %llu bytes at %llx\n", device, (unsigned long long) size, ptr);
 #endif
