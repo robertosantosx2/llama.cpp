@@ -75,22 +75,13 @@ GGML_API void emit(EventType type, const char * label = nullptr,
                    std::uint64_t correlation_token = 0,
                    EventMetadata metadata = {}) noexcept;
 
-inline Backend current_gpu_backend() noexcept {
-#if defined(GGML_USE_HIP)
-    return Backend::rocm;
-#elif defined(GGML_USE_MUSA)
-    return Backend::musa;
-#else
-    return Backend::cuda;
-#endif
-}
-
-inline EventMetadata gpu_metadata(MemoryKind memory = MemoryKind::unknown,
+inline EventMetadata gpu_metadata(Backend backend,
+                                  MemoryKind memory = MemoryKind::unknown,
                                   MemcpyKind copy = MemcpyKind::unknown,
                                   SyncType sync = SyncType::unknown,
                                   std::uint32_t raw_copy = 0xffffffffu) noexcept {
     EventMetadata metadata;
-    metadata.backend = current_gpu_backend();
+    metadata.backend = backend;
     metadata.memory_kind = memory;
     metadata.memcpy_kind = copy;
     metadata.sync_type = sync;
@@ -116,14 +107,14 @@ inline EventMetadata context_sync_metadata() noexcept {
     return metadata;
 }
 
-inline void emit_gpu(EventType type, const char * label = nullptr,
+inline void emit_gpu(Backend backend, EventType type, const char * label = nullptr,
                       std::uint64_t value0 = 0, std::uint64_t value1 = 0,
                       std::uint16_t flags = phase_instant,
                       std::uint64_t request_id = 0,
                       std::uint64_t duration_ns = 0,
                       std::uint64_t correlation_token = 0,
                       EventMetadata metadata = {}) noexcept {
-    metadata.backend = current_gpu_backend();
+    metadata.backend = backend;
     emit(type, label, value0, value1, flags, request_id, duration_ns, correlation_token, metadata);
 }
 
