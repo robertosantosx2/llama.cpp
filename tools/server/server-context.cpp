@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cinttypes>
 #include <cstdio>
+#include <cstring>
 #include <deque>
 #include <exception>
 #include <memory>
@@ -62,8 +63,13 @@ static void nepenthes_nvtx_request_marker(const char * phase, std::uint64_t toke
     const std::uint64_t after_ns = nepenthes::now_ns();
     // The bracket bounds the host-side call that emitted the NVTX marker.
     // Nsight time is obtained from NVTX_EVENTS; these values remain host monotonic.
-    nepenthes::emit(nepenthes::EventType::nvtx_marker,
-                    phase[0] == 's' ? "request.start" : "request.end",
+    const char * event_label = "request.phase";
+    if (std::strcmp(phase, "start") == 0) event_label = "request.start";
+    else if (std::strcmp(phase, "end") == 0) event_label = "request.end";
+    else if (std::strcmp(phase, "prefill_start") == 0) event_label = "request.prefill.start";
+    else if (std::strcmp(phase, "prefill_end") == 0) event_label = "request.prefill.end";
+    else if (std::strcmp(phase, "decode_start") == 0) event_label = "request.decode.start";
+    nepenthes::emit(nepenthes::EventType::nvtx_marker, event_label,
                     before_ns, after_ns, flags, request_id, 0, token);
 #else
     (void) phase;
@@ -2103,6 +2109,8 @@ private:
 
         if (slot.task->type == SERVER_TASK_TYPE_TTS) {
             slot.state = SLOT_STATE_PROCESSING_PROMPT;
+            nepenthes_nvtx_request_marker("prefill_start", slot.nepenthes_correlation_token,
+                    static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_begin);
         } else {
             slot.state = slot.task->is_child()
                 ? SLOT_STATE_WAIT_OTHER // wait for the parent to process prompt
@@ -3714,6 +3722,10 @@ private:
                     send_error(slot, "TTS prompt processing failed", ERROR_TYPE_SERVER);
                     slot.release();
                 } else if (ret == 0) {
+                    nepenthes_nvtx_request_marker("prefill_end", slot.nepenthes_correlation_token,
+                            static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_end);
+                    nepenthes_nvtx_request_marker("decode_start", slot.nepenthes_correlation_token,
+                            static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_begin);
                     // done prompt, do sample and save h_state_prompt
                     slot.tts.sampled = common_sampler_sample(slot.smpl.get(), ctx_tgt, -1);
                     common_sampler_accept(slot.smpl.get(), slot.tts.sampled, true);
@@ -4033,6 +4045,10 @@ private:
                     if (slot.state == SLOT_STATE_STARTED) {
                         slot.stats.update_prompt_start();
 
+                        if (!input_tokens.empty()) {
+                            nepenthes_nvtx_request_marker("prefill_start", slot.nepenthes_correlation_token,
+                                    static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_begin);
+                        }
                         slot.state = SLOT_STATE_PROCESSING_PROMPT;
 
                         SLT_TRC(slot, "new prompt, n_ctx_slot = %d, n_keep = %d, task.n_tokens = %d\n",
@@ -4833,6 +4849,8 @@ private:
             }
 
             if (slot.state == SLOT_STATE_DONE_PROMPT) {
+                nepenthes_nvtx_request_marker("prefill_end", slot.nepenthes_correlation_token,
+                        static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_end);
                 if (slot.task->type == SERVER_TASK_TYPE_EMBEDDING) {
                     // prompt evaluated for embedding
                     send_embedding(slot, batch.view);
@@ -4858,6 +4876,8 @@ private:
                 GGML_ASSERT(slot.task->need_sampling());
 
                 // prompt evaluated for next-token prediction
+                nepenthes_nvtx_request_marker("decode_start", slot.nepenthes_correlation_token,
+                        static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_begin);
                 slot.state = SLOT_STATE_GENERATING;
 
                 if (slot.can_speculate()) {
