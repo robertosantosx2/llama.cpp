@@ -213,7 +213,7 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
 
         // fall back to cudaMalloc if not supported (e.g. on Windows)
         if (err == hipErrorNotSupported) {
-            nepenthes::emit(nepenthes::EventType::fallback, "cuda.managed_to_device_malloc",
+            nepenthes::emit_cuda(nepenthes::EventType::fallback, "cuda.managed_to_device_malloc",
                     static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
                     nepenthes::flag_device);
             static bool warned_unsupported = false;
@@ -230,15 +230,15 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
     }
 
     if (err == cudaSuccess) {
-        nepenthes::emit(nepenthes::EventType::allocation, "cuda.device_malloc",
+        nepenthes::emit_cuda(nepenthes::EventType::allocation, "cuda.device_malloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
                 nepenthes::flag_device);
     } else if (err == cudaErrorMemoryAllocation) {
-        nepenthes::emit(nepenthes::EventType::oom, "cuda.device_malloc",
+        nepenthes::emit_cuda(nepenthes::EventType::oom, "cuda.device_malloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
                 static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
     } else {
-        nepenthes::emit(nepenthes::EventType::error, "cuda.device_malloc",
+        nepenthes::emit_cuda(nepenthes::EventType::error, "cuda.device_malloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
                 static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
     }
@@ -569,7 +569,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
-                nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_release",
+                nepenthes::emit_cuda(nepenthes::EventType::free_event, "cuda.pool_release",
                         static_cast<std::uint64_t>(b.size), static_cast<std::uint64_t>(device),
                         nepenthes::flag_device);
                 CUDA_CHECK(cudaFree(b.ptr));
@@ -616,7 +616,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
                         if (!best_diff) {
                             void * ptr = b.ptr;
                             *actual_size = b.size;
-                            nepenthes::emit(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
+                            nepenthes::emit_cuda(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
                                     static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(b.size),
                                     nepenthes::flag_device);
                             b.ptr = nullptr;
@@ -631,7 +631,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
             ggml_cuda_buffer& b = buffer_pool[ibest];
             void * ptr = b.ptr;
             *actual_size = b.size;
-            nepenthes::emit(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
+            nepenthes::emit_cuda(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
                     static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(b.size),
                     nepenthes::flag_device);
             b.ptr = nullptr;
@@ -644,7 +644,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         ggml_cuda_set_device(device);
         cudaError_t err = ggml_cuda_device_malloc(&ptr, look_ahead_size, device);
         if (err == cudaErrorMemoryAllocation) {
-            nepenthes::emit(nepenthes::EventType::fallback, "cuda.pool_oom_flush_retry",
+            nepenthes::emit_cuda(nepenthes::EventType::fallback, "cuda.pool_oom_flush_retry",
                     static_cast<std::uint64_t>(look_ahead_size), static_cast<std::uint64_t>(device),
                     nepenthes::flag_device);
             (void)cudaGetLastError();
@@ -673,7 +673,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer& b = buffer_pool[i];
             if (b.ptr == nullptr) {
-                nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_return",
+                nepenthes::emit_cuda(nepenthes::EventType::free_event, "cuda.pool_return",
                         static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
                         nepenthes::flag_device);
                 b.ptr = ptr;
@@ -683,7 +683,7 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         }
         GGML_LOG_DEBUG(GGML_CUDA_NAME " buffer pool full, increase MAX_CUDA_BUFFERS\n");
         ggml_cuda_set_device(device);
-        nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_release",
+        nepenthes::emit_cuda(nepenthes::EventType::free_event, "cuda.pool_release",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
                 nepenthes::flag_device);
         CUDA_CHECK(cudaFree(ptr));
@@ -716,7 +716,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
 
     ~ggml_cuda_pool_vmm() {
         if (pool_addr != 0) {
-            nepenthes::emit(nepenthes::EventType::free_event, "cuda.vmm_pool_destroy",
+            nepenthes::emit_cuda(nepenthes::EventType::free_event, "cuda.vmm_pool_destroy",
                     static_cast<std::uint64_t>(pool_size), static_cast<std::uint64_t>(device),
                     nepenthes::flag_device);
 #if defined(GGML_USE_HIP)
@@ -749,18 +749,18 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             if (pool_addr == 0) {
                 CUresult err = cuMemAddressReserve(&pool_addr, max_size, 0, 0, 0);
                 while (err == CUDA_ERROR_OUT_OF_MEMORY && (max_size >> 1) >= reserve_size && (max_size >> 1) >= granularity) {
-                    nepenthes::emit(nepenthes::EventType::fallback, "cuda.vmm_address_reserve_shrink",
+                    nepenthes::emit_cuda(nepenthes::EventType::fallback, "cuda.vmm_address_reserve_shrink",
                             static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(device),
                             nepenthes::flag_device);
                     max_size >>= 1;
                     err = cuMemAddressReserve(&pool_addr, max_size, 0, 0, 0);
                 }
                 if (err == CUDA_ERROR_OUT_OF_MEMORY) {
-                    nepenthes::emit(nepenthes::EventType::oom, "cuda.vmm_address_reserve",
+                    nepenthes::emit_cuda(nepenthes::EventType::oom, "cuda.vmm_address_reserve",
                             static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(device),
                             static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
                 } else if (err != CUDA_SUCCESS) {
-                    nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_address_reserve",
+                    nepenthes::emit_cuda(nepenthes::EventType::error, "cuda.vmm_address_reserve",
                             static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(err),
                             static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
                 }
@@ -781,15 +781,15 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             CUmemGenericAllocationHandle handle;
             const CUresult create_result = cuMemCreate(&handle, reserve_size, &prop, 0);
             if (create_result == CUDA_ERROR_OUT_OF_MEMORY) {
-                nepenthes::emit(nepenthes::EventType::oom, "cuda.vmm_physical_alloc",
+                nepenthes::emit_cuda(nepenthes::EventType::oom, "cuda.vmm_physical_alloc",
                         static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(device),
                         static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
             } else if (create_result != CUDA_SUCCESS) {
-                nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_physical_alloc",
+                nepenthes::emit_cuda(nepenthes::EventType::error, "cuda.vmm_physical_alloc",
                         static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(create_result),
                         static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
             } else {
-                nepenthes::emit(nepenthes::EventType::allocation, "cuda.vmm_physical_alloc",
+                nepenthes::emit_cuda(nepenthes::EventType::allocation, "cuda.vmm_physical_alloc",
                         static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(device),
                         nepenthes::flag_device);
             }
@@ -872,7 +872,7 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
     }
 
     void free(void * ptr, size_t size) override {
-        nepenthes::emit(nepenthes::EventType::free_event, "cuda.vmm_pool_free",
+        nepenthes::emit_cuda(nepenthes::EventType::free_event, "cuda.vmm_pool_free",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
                 nepenthes::flag_device);
 #ifdef DEBUG_CUDA_MALLOC
@@ -1852,7 +1852,7 @@ static bool ggml_backend_buft_is_cuda_host(ggml_backend_buffer_type_t buft) {
 }
 
 static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    nepenthes::emit(nepenthes::EventType::free_event, "cuda.pinned_host.free",
+    nepenthes::emit_cuda(nepenthes::EventType::free_event, "cuda.pinned_host.free",
             static_cast<std::uint64_t>(buffer->size), 0, nepenthes::flag_host);
     CUDA_CHECK(cudaFreeHost(buffer->context));
 }
@@ -1867,7 +1867,7 @@ static void * ggml_cuda_host_malloc(size_t size) {
     if (err != cudaSuccess) {
         const nepenthes::EventType event_type = err == cudaErrorMemoryAllocation
                 ? nepenthes::EventType::oom : nepenthes::EventType::error;
-        nepenthes::emit(event_type, "cuda.pinned_host.alloc",
+        nepenthes::emit_cuda(event_type, "cuda.pinned_host.alloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
                 static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
         // clear the error
@@ -1877,7 +1877,7 @@ static void * ggml_cuda_host_malloc(size_t size) {
         return nullptr;
     }
 
-    nepenthes::emit(nepenthes::EventType::allocation, "cuda.pinned_host.alloc",
+    nepenthes::emit_cuda(nepenthes::EventType::allocation, "cuda.pinned_host.alloc",
             static_cast<std::uint64_t>(size), 0, nepenthes::flag_host);
     return ptr;
 }
@@ -1886,7 +1886,7 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
     void * ptr = ggml_cuda_host_malloc(size);
 
     if (ptr == nullptr) {
-        nepenthes::emit(nepenthes::EventType::fallback, "cuda.pinned_host_to_cpu",
+        nepenthes::emit_cuda(nepenthes::EventType::fallback, "cuda.pinned_host_to_cpu",
                 static_cast<std::uint64_t>(size), 0,
                 static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
         // fallback to cpu buffer
