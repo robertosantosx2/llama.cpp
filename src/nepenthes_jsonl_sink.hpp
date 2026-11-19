@@ -205,7 +205,7 @@ private:
     }
 
     static void write_optional_string(std::ofstream & output, const char * value) {
-        if (value) output << "\\\"" << value << "\\\"";
+        if (value) output << "\"" << value << "\"";
         else output << "null";
     }
 
@@ -256,7 +256,7 @@ private:
                 continue;
             }
             const auto id = next_id_.fetch_add(1, std::memory_order_relaxed);
-            output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
+            output_ << "{\"schema_version\":\"1.1\",\"run_id\":\"" << run_id_json_
                     << "\",\"event_id\":\"llama-" << id
                     << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << event.timestamp_unix_ns
                     << ",\"monotonic_ns\":" << event.monotonic_ns
@@ -265,8 +265,20 @@ private:
             if (event.correlation_token == 0) output_ << "null";
             else output_ << event.correlation_token;
             output_ << ",\"attribution_level\":";
-            if (event.correlation_token == 0) output_ << "null";
-            else output_ << "\"exact\"";
+            write_optional_string(output_, attribution_level_name(event));
+            output_ << ",\"backend\":";
+            write_optional_string(output_, backend_name(event.metadata.backend));
+            output_ << ",\"memory_kind\":";
+            write_optional_string(output_, memory_kind_name(event.metadata.memory_kind));
+            output_ << ",\"memcpy_kind\":";
+            write_optional_string(output_, memcpy_kind_name(event.metadata.memcpy_kind));
+            output_ << ",\"raw_memcpy_kind\":";
+            if (event.metadata.raw_memcpy_kind == 0xffffffffu) output_ << "null";
+            else output_ << event.metadata.raw_memcpy_kind;
+            output_ << ",\"sync_type\":";
+            write_optional_string(output_, sync_type_name(event.metadata.sync_type));
+            output_ << ",\"kv_op\":";
+            write_optional_string(output_, kv_op_name(event.metadata.kv_op));
             output_ << ",\"clock_domain\":\"steady_clock\""
                     << ",\"event_kind\":\"" << type_name(event.type)
                     << "\",\"label\":\"" << escape_json(event.label ? event.label : "")
@@ -279,7 +291,7 @@ private:
         const auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         const auto summary_id = next_id_.fetch_add(1, std::memory_order_relaxed);
-        output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
+        output_ << "{\"schema_version\":\"1.1\",\"run_id\":\"" << run_id_json_
                 << "\",\"event_id\":\"llama-" << summary_id
                 << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << wall_ns
                 << ",\"event_kind\":\"sink_summary\",\"events_drained\":" << (summary_id - 1)
