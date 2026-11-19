@@ -13,9 +13,9 @@ int main() {
     {
         nepenthes::JsonlSink sink(path, "run\"line\nbreak");
         for (std::uint64_t i = 0; i < 256; ++i) {
-            nepenthes::emit_gpu(nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
+            nepenthes::emit_gpu(nepenthes::Backend::cuda, nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
                             nepenthes::phase_instant, 0, 0, i + 1,
-                            nepenthes::gpu_metadata(nepenthes::MemoryKind::device));
+                            nepenthes::gpu_metadata(nepenthes::Backend::cuda, nepenthes::MemoryKind::device));
         }
         nepenthes::emit(nepenthes::EventType::nvtx_marker, "request.start", 100, 120,
                         nepenthes::phase_begin, 42, 0, 999);
@@ -28,9 +28,9 @@ int main() {
         for (std::uint64_t t = 0; t < 4; ++t) {
             producers.emplace_back([t] {
                 for (std::uint64_t i = 0; i < 1000; ++i) {
-                    nepenthes::emit_gpu(nepenthes::EventType::transfer, "moe.transfer", t, 1024,
+                    nepenthes::emit_gpu(nepenthes::Backend::cuda, nepenthes::EventType::transfer, "moe.transfer", t, 1024,
                                     nepenthes::phase_instant, t + 1, 0, 0,
-                                    nepenthes::gpu_metadata(nepenthes::MemoryKind::device,
+                                    nepenthes::gpu_metadata(nepenthes::Backend::cuda, nepenthes::MemoryKind::device,
                                             nepenthes::MemcpyKind::host_to_device,
                                             nepenthes::SyncType::stream, 1));
                 }
