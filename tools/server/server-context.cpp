@@ -17,6 +17,10 @@
 #include "common.h"
 #include "fit.h"
 #include "llama.h"
+#include "../../src/nepenthes_jsonl_sink.hpp"
+#if defined(NEPENTHES_USE_NVTX)
+#include <nvtx3/nvToolsExt.h>
+#endif
 #include "log.h"
 #include "sampling.h"
 #include "speculative.h"
@@ -27,6 +31,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cinttypes>
+#include <cstdio>
 #include <deque>
 #include <exception>
 #include <memory>
@@ -43,6 +48,30 @@
 #endif
 #include <windows.h>
 #endif
+
+
+static void nepenthes_nvtx_request_marker(const char * phase, std::uint64_t token,
+                                          std::uint64_t request_id, std::uint16_t flags) noexcept {
+#if defined(NEPENTHES_USE_NVTX)
+    char message[128];
+    std::snprintf(message, sizeof(message), "nepenthes.request.%s token=%llu request=%llu",
+                  phase, static_cast<unsigned long long>(token),
+                  static_cast<unsigned long long>(request_id));
+    const std::uint64_t before_ns = nepenthes::now_ns();
+    nvtxMarkA(message);
+    const std::uint64_t after_ns = nepenthes::now_ns();
+    // The bracket bounds the host-side call that emitted the NVTX marker.
+    // Nsight time is obtained from NVTX_EVENTS; these values remain host monotonic.
+    nepenthes::emit(nepenthes::EventType::nvtx_marker,
+                    phase[0] == 's' ? "request.start" : "request.end",
+                    before_ns, after_ns, flags, request_id, 0, token);
+#else
+    (void) phase;
+    (void) token;
+    (void) request_id;
+    (void) flags;
+#endif
+}
 
 constexpr int HTTP_POLLING_SECONDS = 1;
 
@@ -266,6 +295,7 @@ struct server_batch {
 
 struct server_slot {
     int id;
+    std::uint64_t nepenthes_correlation_token = 0;
 
     llama_context * ctx_tgt = nullptr;
     llama_context * ctx_dft = nullptr;
@@ -454,6 +484,7 @@ struct server_slot {
 
         task_prev = std::move(task);
         task.reset();
+        nepenthes_correlation_token = 0;
 
         // note: callback_on_reset() must have run before this, see release()
         stats = {};
@@ -669,6 +700,15 @@ struct server_slot {
             GGML_ASSERT(task);
 
             SLT_INF(*this, "stop processing: n_tokens = %d, truncated = %d\n", prompt.n_tokens(), truncated);
+
+            if (task) {
+                nepenthes_nvtx_request_marker("end", nepenthes_correlation_token,
+                        static_cast<std::uint64_t>(task->id), nepenthes::phase_end);
+                nepenthes::emit(nepenthes::EventType::request_end, "server.task",
+                        static_cast<std::uint64_t>(task->id), static_cast<std::uint64_t>(id),
+                        nepenthes::phase_instant, static_cast<std::uint64_t>(task->id), 0,
+                        nepenthes_correlation_token);
+            }
 
             t_last_used = ggml_time_us();
 
@@ -2048,6 +2088,14 @@ private:
         slot.n_predict_max = task.params.n_predict != -1 ? task.params.n_predict : params_base.n_predict;
 
         slot.task = std::make_unique<const server_task>(std::move(task));
+        slot.nepenthes_correlation_token = nepenthes::next_correlation_token();
+
+        nepenthes_nvtx_request_marker("start", slot.nepenthes_correlation_token,
+                static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_begin);
+        nepenthes::emit(nepenthes::EventType::request_start, "server.task",
+                static_cast<std::uint64_t>(slot.task->id), static_cast<std::uint64_t>(slot.id),
+                nepenthes::phase_instant, static_cast<std::uint64_t>(slot.task->id), 0,
+                slot.nepenthes_correlation_token);
 
         if (slot.task->type == SERVER_TASK_TYPE_TTS) {
             slot.state = SLOT_STATE_PROCESSING_PROMPT;
