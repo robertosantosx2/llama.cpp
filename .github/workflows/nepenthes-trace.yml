@@ -1,0 +1,63 @@
+name: NEPENTHES runtime trace
+
+on:
+  pull_request:
+    paths:
+      - "src/nepenthes_trace.hpp"
+      - "src/nepenthes_jsonl_sink.hpp"
+      - "src/llama-context.cpp"
+      - "src/llama-moe-cache.cpp"
+      - "src/llama-kv-cache.cpp"
+      - "tools/server/server-context.cpp"
+      - "tests/nepenthes/**"
+      - ".github/workflows/nepenthes-trace.yml"
+  push:
+    branches: [master]
+    paths:
+      - "src/nepenthes_trace.hpp"
+      - "src/nepenthes_jsonl_sink.hpp"
+      - "src/llama-context.cpp"
+      - "src/llama-moe-cache.cpp"
+      - "src/llama-kv-cache.cpp"
+      - "tools/server/server-context.cpp"
+      - "tests/nepenthes/**"
+      - ".github/workflows/nepenthes-trace.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nepenthes-trace-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trace-and-cpu-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build libcurl4-openssl-dev pkg-config
+      - name: Compile and run trace contract test
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc \
+            tests/nepenthes/test_trace.cpp -o /tmp/nepenthes-trace-test
+          /tmp/nepenthes-trace-test
+      - name: Compile and run bounded JSONL sink test
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc \
+            tests/nepenthes/test_jsonl_sink.cpp -o /tmp/nepenthes-jsonl-test
+          /tmp/nepenthes-jsonl-test
+      - name: Configure CPU llama-server
+        run: |
+          cmake -S . -B build-nepenthes -G Ninja \
+            -DGGML_CUDA=OFF \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_CURL=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build instrumented llama-server
+        run: cmake --build build-nepenthes --target llama-server --parallel 2
