@@ -10,6 +10,7 @@ on:
       - "src/llama-model.cpp"
       - "src/CMakeLists.txt"
       - "ggml/include/ggml-nepenthes.hpp"
+      - "ggml/include/ggml-nepenthes-c.h"
       - "ggml/src/ggml-nepenthes.cpp"
       - "ggml/src/ggml-cpu/ggml-cpu.c"
       - "ggml/src/ggml-backend.cpp"
