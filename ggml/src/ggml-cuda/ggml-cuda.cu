@@ -1859,7 +1859,9 @@ static void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
     cudaError_t err = cudaMallocHost((void **) &ptr, size);
     if (err != cudaSuccess) {
-        nepenthes::emit(nepenthes::EventType::error, "cuda.pinned_host.alloc",
+        const nepenthes::EventType event_type = err == cudaErrorMemoryAllocation
+                ? nepenthes::EventType::oom : nepenthes::EventType::error;
+        nepenthes::emit(event_type, "cuda.pinned_host.alloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
                 static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
         // clear the error
