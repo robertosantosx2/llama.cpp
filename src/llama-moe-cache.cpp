@@ -864,6 +864,10 @@ struct llama_moe_cache::impl {
                 static_cast<std::uint64_t>(n_hit), static_cast<std::uint64_t>(ids.size()));
         nepenthes::emit(nepenthes::EventType::cache_miss, "moe.expert",
                 static_cast<std::uint64_t>(fills.size() + cpu.size()), static_cast<std::uint64_t>(cpu.size()));
+        if (cpu.size() > 0) {
+            nepenthes::emit(nepenthes::EventType::fallback, "moe.expert_cpu_fallback_scheduled",
+                    static_cast<std::uint64_t>(cpu.size()), static_cast<std::uint64_t>(ids.size()));
+        }
         if (bytes > 0) {
             nepenthes::emit(nepenthes::EventType::transfer, "moe.expert_upload",
                     static_cast<std::uint64_t>(bytes), static_cast<std::uint64_t>(fills.size()),
