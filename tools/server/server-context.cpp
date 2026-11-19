@@ -32,6 +32,8 @@
 #include <cstddef>
 #include <cinttypes>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <exception>
 #include <memory>
@@ -52,6 +54,10 @@
 
 static void nepenthes_nvtx_request_marker(const char * phase, std::uint64_t token,
                                           std::uint64_t request_id, std::uint16_t flags) noexcept {
+    const char * profile = std::getenv("NEPENTHES_PROFILE");
+    if (profile != nullptr && std::strcmp(profile, "latency-critical") == 0) {
+        return; // Request JSONL markers remain; NVTX calls are disabled in the low-overhead profile.
+    }
 #if defined(NEPENTHES_USE_NVTX)
     char message[128];
     std::snprintf(message, sizeof(message), "nepenthes.request.%s token=%llu request=%llu",
