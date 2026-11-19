@@ -5,6 +5,8 @@
 #include "llama-memory.h"
 #include "llama-model.h"
 
+#include "nepenthes_trace.hpp"
+
 #include "ggml-cpp.h"
 
 #include <algorithm>
@@ -272,6 +274,9 @@ struct moe_cache_lru {
         for (int32_t e : misses) {
             const int32_t s = victim(il);
             if (key_of[s] >= 0) {
+                nepenthes::emit(nepenthes::EventType::eviction, "moe.expert",
+                        static_cast<std::uint64_t>(key_layer(key_of[s])),
+                        static_cast<std::uint64_t>(key_expert(key_of[s])));
                 slot_map[key_layer(key_of[s])][key_expert(key_of[s])] = empty;
             } else {
                 n_filled++;
@@ -854,6 +859,16 @@ struct llama_moe_cache::impl {
         st.misses += fills.size() + cpu.size();
         st.cpu    += cpu.size();
         st.bytes  += bytes;
+
+        nepenthes::emit(nepenthes::EventType::cache_hit, "moe.expert",
+                static_cast<std::uint64_t>(n_hit), static_cast<std::uint64_t>(ids.size()));
+        nepenthes::emit(nepenthes::EventType::cache_miss, "moe.expert",
+                static_cast<std::uint64_t>(fills.size() + cpu.size()), static_cast<std::uint64_t>(cpu.size()));
+        if (bytes > 0) {
+            nepenthes::emit(nepenthes::EventType::transfer, "moe.expert_upload",
+                    static_cast<std::uint64_t>(bytes), static_cast<std::uint64_t>(fills.size()),
+                    nepenthes::flag_device);
+        }
 
         // the next copy synchronizes the backend before it changes the slot map again
         ggml_backend_tensor_set_async(backend, dst, l.slot_map->data, 0, ggml_nbytes(l.slot_map));
