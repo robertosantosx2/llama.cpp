@@ -103,6 +103,19 @@
 #include <nvml.h>
 #endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
 
+static constexpr nepenthes::Backend nepenthes_gpu_backend_kind() noexcept {
+#if defined(GGML_USE_HIP)
+    return nepenthes::Backend::rocm;
+#elif defined(GGML_USE_MUSA)
+    return nepenthes::Backend::musa;
+#else
+    return nepenthes::Backend::cuda;
+#endif
+}
+
+#define NEPENTHES_EMIT_GPU(...) nepenthes::emit_gpu(nepenthes_gpu_backend_kind(), __VA_ARGS__)
+#define NEPENTHES_GPU_METADATA(...) nepenthes::gpu_metadata(nepenthes_gpu_backend_kind(), __VA_ARGS__)
+
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 #define GGML_LOG_WARN_ONCE(str) \
@@ -213,9 +226,9 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
 
         // fall back to cudaMalloc if not supported (e.g. on Windows)
         if (err == hipErrorNotSupported) {
-            nepenthes::emit(nepenthes::EventType::fallback, "cuda.managed_to_device_malloc",
+            NEPENTHES_EMIT_GPU(nepenthes::EventType::fallback, "cuda.managed_to_device_malloc",
                     static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                    nepenthes::flag_device);
+                    nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::managed));
             static bool warned_unsupported = false;
             if (!warned_unsupported) {
                 GGML_LOG_WARN("hipMallocManaged unsupported, falling back to hipMalloc.\n");
@@ -230,17 +243,17 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
     }
 
     if (err == cudaSuccess) {
-        nepenthes::emit(nepenthes::EventType::allocation, "cuda.device_malloc",
+        NEPENTHES_EMIT_GPU(nepenthes::EventType::allocation, "cuda.device_malloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                nepenthes::flag_device);
+                nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
     } else if (err == cudaErrorMemoryAllocation) {
-        nepenthes::emit(nepenthes::EventType::oom, "cuda.device_malloc",
+        NEPENTHES_EMIT_GPU(nepenthes::EventType::oom, "cuda.device_malloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
     } else {
-        nepenthes::emit(nepenthes::EventType::error, "cuda.device_malloc",
+        NEPENTHES_EMIT_GPU(nepenthes::EventType::error, "cuda.device_malloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
-                static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
     }
     return err;
 }
@@ -569,9 +582,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer & b = buffer_pool[i];
             if (b.ptr != nullptr) {
-                nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_release",
+                NEPENTHES_EMIT_GPU(nepenthes::EventType::free_event, "cuda.pool_release",
                         static_cast<std::uint64_t>(b.size), static_cast<std::uint64_t>(device),
-                        nepenthes::flag_device);
+                        nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
                 CUDA_CHECK(cudaFree(b.ptr));
                 pool_size -= b.size;
                 b.ptr  = nullptr;
@@ -616,9 +629,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
                         if (!best_diff) {
                             void * ptr = b.ptr;
                             *actual_size = b.size;
-                            nepenthes::emit(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
+                            NEPENTHES_EMIT_GPU(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
                                     static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(b.size),
-                                    nepenthes::flag_device);
+                                    nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
                             b.ptr = nullptr;
                             b.size = 0;
                             return ptr;
@@ -631,9 +644,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
             ggml_cuda_buffer& b = buffer_pool[ibest];
             void * ptr = b.ptr;
             *actual_size = b.size;
-            nepenthes::emit(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
+            NEPENTHES_EMIT_GPU(nepenthes::EventType::cache_hit, "cuda.pool_reuse",
                     static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(b.size),
-                    nepenthes::flag_device);
+                    nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
             b.ptr = nullptr;
             b.size = 0;
             return ptr;
@@ -644,9 +657,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         ggml_cuda_set_device(device);
         cudaError_t err = ggml_cuda_device_malloc(&ptr, look_ahead_size, device);
         if (err == cudaErrorMemoryAllocation) {
-            nepenthes::emit(nepenthes::EventType::fallback, "cuda.pool_oom_flush_retry",
+            NEPENTHES_EMIT_GPU(nepenthes::EventType::fallback, "cuda.pool_oom_flush_retry",
                     static_cast<std::uint64_t>(look_ahead_size), static_cast<std::uint64_t>(device),
-                    nepenthes::flag_device);
+                    nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
             (void)cudaGetLastError();
             const size_t cached_bytes = pool_size;
             GGML_LOG_DEBUG(GGML_CUDA_NAME " pool[%d]: alloc of %.2f MiB failed, flushing %.2f MiB of cached buffers and retrying\n",
@@ -673,9 +686,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         for (int i = 0; i < MAX_BUFFERS; ++i) {
             ggml_cuda_buffer& b = buffer_pool[i];
             if (b.ptr == nullptr) {
-                nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_return",
+                NEPENTHES_EMIT_GPU(nepenthes::EventType::free_event, "cuda.pool_return",
                         static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                        nepenthes::flag_device);
+                        nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
                 b.ptr = ptr;
                 b.size = size;
                 return;
@@ -683,9 +696,9 @@ struct ggml_cuda_pool_leg : public ggml_cuda_pool {
         }
         GGML_LOG_DEBUG(GGML_CUDA_NAME " buffer pool full, increase MAX_CUDA_BUFFERS\n");
         ggml_cuda_set_device(device);
-        nepenthes::emit(nepenthes::EventType::free_event, "cuda.pool_release",
+        NEPENTHES_EMIT_GPU(nepenthes::EventType::free_event, "cuda.pool_release",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                nepenthes::flag_device);
+                nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device));
         CUDA_CHECK(cudaFree(ptr));
         pool_size -= size;
         invalidate_cuda_graphs();
@@ -716,9 +729,9 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
 
     ~ggml_cuda_pool_vmm() {
         if (pool_addr != 0) {
-            nepenthes::emit(nepenthes::EventType::free_event, "cuda.vmm_pool_destroy",
+            NEPENTHES_EMIT_GPU(nepenthes::EventType::free_event, "cuda.vmm_pool_destroy",
                     static_cast<std::uint64_t>(pool_size), static_cast<std::uint64_t>(device),
-                    nepenthes::flag_device);
+                    nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
 #if defined(GGML_USE_HIP)
             // Workaround for https://github.com/ROCm/ROCR-Runtime/issues/285
             for (std::pair<CUdeviceptr, size_t> & mapping : mappings) {
@@ -736,7 +749,8 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
         const size_t alignment = 128;
         size = alignment * ((size + alignment - 1) / alignment);
         nepenthes::ScopedEvent nepenthes_vmm_alloc(nepenthes::EventType::allocation, "cuda.vmm_pool_alloc",
-                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device));
+                static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device), 0,
+                NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
 
         size_t avail = pool_size - pool_used;
 
@@ -749,20 +763,20 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             if (pool_addr == 0) {
                 CUresult err = cuMemAddressReserve(&pool_addr, max_size, 0, 0, 0);
                 while (err == CUDA_ERROR_OUT_OF_MEMORY && (max_size >> 1) >= reserve_size && (max_size >> 1) >= granularity) {
-                    nepenthes::emit(nepenthes::EventType::fallback, "cuda.vmm_address_reserve_shrink",
+                    NEPENTHES_EMIT_GPU(nepenthes::EventType::fallback, "cuda.vmm_address_reserve_shrink",
                             static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(device),
-                            nepenthes::flag_device);
+                            nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
                     max_size >>= 1;
                     err = cuMemAddressReserve(&pool_addr, max_size, 0, 0, 0);
                 }
                 if (err == CUDA_ERROR_OUT_OF_MEMORY) {
-                    nepenthes::emit(nepenthes::EventType::oom, "cuda.vmm_address_reserve",
+                    NEPENTHES_EMIT_GPU(nepenthes::EventType::oom, "cuda.vmm_address_reserve",
                             static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(device),
-                            static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                            static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
                 } else if (err != CUDA_SUCCESS) {
-                    nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_address_reserve",
+                    NEPENTHES_EMIT_GPU(nepenthes::EventType::error, "cuda.vmm_address_reserve",
                             static_cast<std::uint64_t>(max_size), static_cast<std::uint64_t>(err),
-                            static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                            static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
                 }
                 CU_CHECK(err);
                 if (max_size < CUDA_POOL_VMM_MAX_SIZE) {
@@ -781,17 +795,17 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
             CUmemGenericAllocationHandle handle;
             const CUresult create_result = cuMemCreate(&handle, reserve_size, &prop, 0);
             if (create_result == CUDA_ERROR_OUT_OF_MEMORY) {
-                nepenthes::emit(nepenthes::EventType::oom, "cuda.vmm_physical_alloc",
+                NEPENTHES_EMIT_GPU(nepenthes::EventType::oom, "cuda.vmm_physical_alloc",
                         static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(device),
-                        static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                        static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
             } else if (create_result != CUDA_SUCCESS) {
-                nepenthes::emit(nepenthes::EventType::error, "cuda.vmm_physical_alloc",
+                NEPENTHES_EMIT_GPU(nepenthes::EventType::error, "cuda.vmm_physical_alloc",
                         static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(create_result),
-                        static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed));
+                        static_cast<std::uint16_t>(nepenthes::flag_device | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
             } else {
-                nepenthes::emit(nepenthes::EventType::allocation, "cuda.vmm_physical_alloc",
+                NEPENTHES_EMIT_GPU(nepenthes::EventType::allocation, "cuda.vmm_physical_alloc",
                         static_cast<std::uint64_t>(reserve_size), static_cast<std::uint64_t>(device),
-                        nepenthes::flag_device);
+                        nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
             }
             CU_CHECK(create_result);
 
@@ -872,9 +886,9 @@ struct ggml_cuda_pool_vmm : public ggml_cuda_pool {
     }
 
     void free(void * ptr, size_t size) override {
-        nepenthes::emit(nepenthes::EventType::free_event, "cuda.vmm_pool_free",
+        NEPENTHES_EMIT_GPU(nepenthes::EventType::free_event, "cuda.vmm_pool_free",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(device),
-                nepenthes::flag_device);
+                nepenthes::flag_device, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::vmm));
 #ifdef DEBUG_CUDA_MALLOC
         printf("cuda pool[%d]: freed %llu bytes at %llx\n", device, (unsigned long long) size, ptr);
 #endif
@@ -1149,7 +1163,9 @@ static void ggml_backend_cuda_buffer_memset_tensor(ggml_backend_buffer_t buffer,
 static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *) buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.h2d_sync",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(ctx->device));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device,
+                    nepenthes::SyncType::stream, static_cast<std::uint32_t>(cudaMemcpyHostToDevice)));
 
     ggml_cuda_set_device(ctx->device);
     CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cudaStreamPerThread));
@@ -1159,7 +1175,9 @@ static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer, gg
 static void ggml_backend_cuda_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *) buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.d2h_sync",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(ctx->device));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host,
+                    nepenthes::SyncType::stream, static_cast<std::uint32_t>(cudaMemcpyDeviceToHost)));
 
     ggml_cuda_set_device(ctx->device);
     CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cudaStreamPerThread));
@@ -1170,7 +1188,9 @@ static void ggml_backend_cuda_buffer_set_tensor_2d(ggml_backend_buffer_t buffer,
         size_t offset, size_t size, size_t n_copies, size_t stride_tensor, size_t stride_data) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *) buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy2d.h2d_sync",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device,
+                    nepenthes::SyncType::stream, static_cast<std::uint32_t>(cudaMemcpyHostToDevice)));
 
     ggml_cuda_set_device(ctx->device);
     CUDA_CHECK(cudaMemcpy2DAsync(
@@ -1182,7 +1202,9 @@ static void ggml_backend_cuda_buffer_get_tensor_2d(ggml_backend_buffer_t buffer,
         size_t offset, size_t size, size_t n_copies, size_t stride_tensor, size_t stride_data) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy2d.d2h_sync",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host,
+                    nepenthes::SyncType::stream, static_cast<std::uint32_t>(cudaMemcpyDeviceToHost)));
 
     ggml_cuda_set_device(ctx->device);
     CUDA_CHECK(cudaMemcpy2DAsync(
@@ -1193,7 +1215,8 @@ static void ggml_backend_cuda_buffer_get_tensor_2d(ggml_backend_buffer_t buffer,
 static void ggml_backend_cuda_buffer_set_tensor_n(ggml_backend_buffer_t buffer, struct ggml_tensor * const * tensors, const void * const * data, const size_t * offsets, const size_t * sizes, size_t n_tensors) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.h2d_batch",
-            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(ctx->device));
+            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device));
 
     ggml_cuda_set_device(ctx->device);
 
@@ -1220,7 +1243,8 @@ static void ggml_backend_cuda_buffer_set_tensor_n(ggml_backend_buffer_t buffer, 
 static void ggml_backend_cuda_buffer_get_tensor_n(ggml_backend_buffer_t buffer, const struct ggml_tensor * const * tensors, void * const * data, const size_t * offsets, const size_t * sizes, size_t n_tensors) {
     ggml_backend_cuda_buffer_context * ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.d2h_batch",
-            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(ctx->device));
+            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host));
 
     ggml_cuda_set_device(ctx->device);
 
@@ -1254,7 +1278,9 @@ static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, co
         const int dst_physical = ggml_cuda_get_physical_device(dst_ctx->device);
         nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_attempt",
                 static_cast<std::uint64_t>(ggml_nbytes(src)),
-                static_cast<std::uint64_t>(src_physical == dst_physical ? 0 : 1));
+                static_cast<std::uint64_t>(src_physical == dst_physical ? 0 : 1), 0,
+                NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device,
+                        src_physical == dst_physical ? nepenthes::MemcpyKind::device_to_device : nepenthes::MemcpyKind::peer_to_peer));
         if (src_physical == dst_physical) {
             CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(src), cudaMemcpyDeviceToDevice, cudaStreamPerThread));
         } else {
@@ -1275,7 +1301,8 @@ static bool ggml_backend_cuda_buffer_cpy_tensor(ggml_backend_buffer_t buffer, co
 static bool ggml_backend_cuda_buffer_cpy_tensor_n(ggml_backend_buffer_t buffer, const struct ggml_tensor * const * srcs, struct ggml_tensor * const * dsts, size_t n_tensors) {
     ggml_backend_cuda_buffer_context * dst_ctx = (ggml_backend_cuda_buffer_context *)buffer->context;
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_batch",
-            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(dst_ctx->device));
+            static_cast<std::uint64_t>(n_tensors), static_cast<std::uint64_t>(dst_ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_device));
 
     for (size_t i = 0; i < n_tensors; i++) {
         ggml_backend_buffer_t src_buf = srcs[i]->view_src ? srcs[i]->view_src->buffer : srcs[i]->buffer;
@@ -1852,8 +1879,8 @@ static bool ggml_backend_buft_is_cuda_host(ggml_backend_buffer_type_t buft) {
 }
 
 static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    nepenthes::emit(nepenthes::EventType::free_event, "cuda.pinned_host.free",
-            static_cast<std::uint64_t>(buffer->size), 0, nepenthes::flag_host);
+    NEPENTHES_EMIT_GPU(nepenthes::EventType::free_event, "cuda.pinned_host.free",
+            static_cast<std::uint64_t>(buffer->size), 0, nepenthes::flag_host, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::host_pinned));
     CUDA_CHECK(cudaFreeHost(buffer->context));
 }
 
@@ -1867,9 +1894,9 @@ static void * ggml_cuda_host_malloc(size_t size) {
     if (err != cudaSuccess) {
         const nepenthes::EventType event_type = err == cudaErrorMemoryAllocation
                 ? nepenthes::EventType::oom : nepenthes::EventType::error;
-        nepenthes::emit(event_type, "cuda.pinned_host.alloc",
+        NEPENTHES_EMIT_GPU(event_type, "cuda.pinned_host.alloc",
                 static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(err),
-                static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
+                static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::host_pinned));
         // clear the error
         (void)cudaGetLastError();
         GGML_LOG_DEBUG("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
@@ -1877,8 +1904,8 @@ static void * ggml_cuda_host_malloc(size_t size) {
         return nullptr;
     }
 
-    nepenthes::emit(nepenthes::EventType::allocation, "cuda.pinned_host.alloc",
-            static_cast<std::uint64_t>(size), 0, nepenthes::flag_host);
+    NEPENTHES_EMIT_GPU(nepenthes::EventType::allocation, "cuda.pinned_host.alloc",
+            static_cast<std::uint64_t>(size), 0, nepenthes::flag_host, 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::host_pinned));
     return ptr;
 }
 
@@ -1886,9 +1913,9 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
     void * ptr = ggml_cuda_host_malloc(size);
 
     if (ptr == nullptr) {
-        nepenthes::emit(nepenthes::EventType::fallback, "cuda.pinned_host_to_cpu",
+        NEPENTHES_EMIT_GPU(nepenthes::EventType::fallback, "cuda.pinned_host_to_cpu",
                 static_cast<std::uint64_t>(size), 0,
-                static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed));
+                static_cast<std::uint16_t>(nepenthes::flag_host | nepenthes::flag_failed), 0, 0, 0, NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::host_pinned));
         // fallback to cpu buffer
         return ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size);
     }
@@ -2908,7 +2935,8 @@ static void ggml_cuda_mul_mat_id(ggml_backend_cuda_context & ctx, ggml_tensor * 
 
 static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct ggml_tensor * dst) {
     nepenthes::ScopedEvent nepenthes_dispatch(nepenthes::EventType::dispatch, "cuda.op_dispatch",
-            static_cast<std::uint64_t>(dst->op), static_cast<std::uint64_t>(ggml_nelements(dst)));
+            static_cast<std::uint64_t>(dst->op), static_cast<std::uint64_t>(ggml_nelements(dst)), 0,
+            NEPENTHES_GPU_METADATA());
     switch (dst->op) {
         case GGML_OP_ARGMAX:
             ggml_cuda_argmax(ctx, dst);
@@ -3298,7 +3326,9 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.h2d_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyHostToDevice)));
     CUDA_CHECK(cudaMemcpyAsync((char *) tensor->data + offset, data, size, cudaMemcpyHostToDevice, cuda_ctx->stream()));
 }
 
@@ -3309,7 +3339,9 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggm
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy.d2h_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(cuda_ctx->device), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyDeviceToHost)));
     CUDA_CHECK(cudaMemcpyAsync(data, (const char *) tensor->data + offset, size, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
 }
 
@@ -3321,7 +3353,9 @@ static void ggml_backend_cuda_set_tensor_2d_async(ggml_backend_t backend, struct
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy2d.h2d_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::host_to_device,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyHostToDevice)));
     CUDA_CHECK(cudaMemcpy2DAsync(
         (char *) tensor->data + offset, stride_tensor, data, stride_data, size, n_copies, cudaMemcpyHostToDevice, cuda_ctx->stream()));
 }
@@ -3334,7 +3368,9 @@ static void ggml_backend_cuda_get_tensor_2d_async(ggml_backend_t backend, const 
     GGML_ASSERT(buf->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.memcpy2d.d2h_async_submit",
-            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies));
+            static_cast<std::uint64_t>(size), static_cast<std::uint64_t>(n_copies), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device, nepenthes::MemcpyKind::device_to_host,
+                    nepenthes::SyncType::unknown, static_cast<std::uint32_t>(cudaMemcpyDeviceToHost)));
     CUDA_CHECK(cudaMemcpy2DAsync(
         data, stride_data, (const char *) tensor->data + offset, stride_tensor, size, n_copies, cudaMemcpyDeviceToHost, cuda_ctx->stream()));
 }
@@ -3367,7 +3403,9 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
 
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_async_attempt",
             static_cast<std::uint64_t>(ggml_nbytes(dst)),
-            static_cast<std::uint64_t>(backend_src != backend_dst ? 1 : 0));
+            static_cast<std::uint64_t>(backend_src != backend_dst ? 1 : 0), 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::device,
+                    backend_src != backend_dst ? nepenthes::MemcpyKind::peer_to_peer : nepenthes::MemcpyKind::device_to_device));
 
     if (backend_src != backend_dst) {
         // copy on src stream
@@ -3405,7 +3443,9 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
 static void ggml_backend_cuda_synchronize(ggml_backend_t backend) {
     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
     nepenthes::ScopedEvent nepenthes_sync(nepenthes::EventType::sync, "cuda.stream_synchronize",
-            static_cast<std::uint64_t>(cuda_ctx->device));
+            static_cast<std::uint64_t>(cuda_ctx->device), 0, 0,
+            NEPENTHES_GPU_METADATA(nepenthes::MemoryKind::unknown, nepenthes::MemcpyKind::unknown,
+                    nepenthes::SyncType::stream));
 
     CUDA_CHECK(cudaStreamSynchronize(cuda_ctx->stream()));
 

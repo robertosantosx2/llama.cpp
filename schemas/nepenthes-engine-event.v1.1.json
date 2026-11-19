@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/robertosantosx2/llama.cpp/blob/master/schemas/nepenthes-engine-event.v1.1.json",
+  "title": "NEPENTHES llama.cpp engine event v1.1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "event_id",
+    "source",
+    "timestamp_unix_ns",
+    "monotonic_ns",
+    "request_id",
+    "correlation_token",
+    "attribution_level",
+    "backend",
+    "memory_kind",
+    "memcpy_kind",
+    "raw_memcpy_kind",
+    "sync_type",
+    "kv_op",
+    "clock_domain",
+    "event_kind",
+    "label",
+    "value0",
+    "value1",
+    "duration_ns",
+    "flags"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "const": "llama.cpp"
+    },
+    "timestamp_unix_ns": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Wall-clock sample; zero means not sampled on this hot-path event."
+    },
+    "monotonic_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "request_id": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "correlation_token": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "attribution_level": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "exact",
+        "windowed",
+        "device_wide",
+        "estimated",
+        null
+      ]
+    },
+    "backend": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "cpu",
+        "cuda",
+        "metal",
+        "vulkan",
+        "rocm",
+        "musa",
+        null
+      ]
+    },
+    "memory_kind": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "host",
+        "host_pinned",
+        "device",
+        "managed",
+        "vmm",
+        null
+      ]
+    },
+    "memcpy_kind": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "host_to_host",
+        "host_to_device",
+        "device_to_host",
+        "device_to_device",
+        "peer_to_peer",
+        "default",
+        null
+      ]
+    },
+    "raw_memcpy_kind": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "sync_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "stream",
+        "device",
+        "event",
+        "context",
+        null
+      ]
+    },
+    "kv_op": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "clear",
+        "seq_rm",
+        "seq_cp",
+        "seq_keep",
+        "seq_add",
+        "seq_div",
+        "prepare",
+        "update",
+        "apply_ubatch",
+        null
+      ]
+    },
+    "clock_domain": {
+      "const": "steady_clock"
+    },
+    "event_kind": {
+      "type": "string",
+      "enum": [
+        "request_start",
+        "request_end",
+        "graph_compute",
+        "dispatch",
+        "model_load",
+        "model_unload",
+        "routing",
+        "cache_hit",
+        "cache_miss",
+        "eviction",
+        "prefetch",
+        "kv_cache",
+        "allocation",
+        "free",
+        "transfer",
+        "kernel",
+        "sync",
+        "cpu_work",
+        "stall",
+        "oom",
+        "fallback",
+        "error",
+        "clock_calibration",
+        "nvtx_marker",
+        "sink_summary"
+      ]
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "value0": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "value1": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "duration_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "flags": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "events_drained": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "dropped_events": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "write_errors": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true
+}

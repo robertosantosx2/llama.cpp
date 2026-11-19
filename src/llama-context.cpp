@@ -964,7 +964,8 @@ void llama_context::sched_reserve() {
 }
 
 void llama_context::synchronize() {
-    nepenthes::ScopedEvent nepenthes_sync(nepenthes::EventType::sync, "llama.context_synchronize");
+    nepenthes::ScopedEvent nepenthes_sync(nepenthes::EventType::sync, "llama.context_synchronize",
+            0, 0, 0, nepenthes::context_sync_metadata());
     if (!sched) {
         return;
     }

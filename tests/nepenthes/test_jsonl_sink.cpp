@@ -13,17 +13,26 @@ int main() {
     {
         nepenthes::JsonlSink sink(path, "run\"line\nbreak");
         for (std::uint64_t i = 0; i < 256; ++i) {
-            nepenthes::emit(nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
-                            nepenthes::phase_instant, 0, 0, i + 1);
+            nepenthes::emit_gpu(nepenthes::Backend::cuda, nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
+                            nepenthes::phase_instant, 0, 0, i + 1,
+                            nepenthes::gpu_metadata(nepenthes::Backend::cuda, nepenthes::MemoryKind::device));
         }
         nepenthes::emit(nepenthes::EventType::nvtx_marker, "request.start", 100, 120,
                         nepenthes::phase_begin, 42, 0, 999);
+        nepenthes::emit(nepenthes::EventType::kv_cache, "kv.seq_rm", 1, 0,
+                        nepenthes::phase_instant, 0, 0, 0,
+                        nepenthes::kv_metadata(nepenthes::KvOp::seq_rm));
+        nepenthes::emit(nepenthes::EventType::cpu_work, "cpu.worker_graph_compute", 2, 64,
+                        nepenthes::phase_instant, 0, 2500, 0, nepenthes::cpu_metadata());
         std::vector<std::thread> producers;
         for (std::uint64_t t = 0; t < 4; ++t) {
             producers.emplace_back([t] {
                 for (std::uint64_t i = 0; i < 1000; ++i) {
-                    nepenthes::emit(nepenthes::EventType::transfer, "moe.transfer", t, 1024,
-                                    nepenthes::phase_instant, t + 1);
+                    nepenthes::emit_gpu(nepenthes::Backend::cuda, nepenthes::EventType::transfer, "moe.transfer", t, 1024,
+                                    nepenthes::phase_instant, t + 1, 0, 0,
+                                    nepenthes::gpu_metadata(nepenthes::Backend::cuda, nepenthes::MemoryKind::device,
+                                            nepenthes::MemcpyKind::host_to_device,
+                                            nepenthes::SyncType::stream, 1));
                 }
             });
         }
@@ -46,10 +55,24 @@ int main() {
         assert(line.back() == '}');
         assert(line.find("\"source\":\"llama.cpp\"") != std::string::npos);
         assert(line.find("\"run_id\":\"run\\\"line\\nbreak\"") != std::string::npos);
+        assert(line.find("\"schema_version\":\"1.1\"") != std::string::npos);
         if (line.find("\"event_kind\":\"kernel\"") != std::string::npos) {
             assert(line.find("\"correlation_token\":") != std::string::npos);
             assert(line.find("\"attribution_level\":\"exact\"") != std::string::npos);
             assert(line.find("\"clock_domain\":\"steady_clock\"") != std::string::npos);
+            assert(line.find("\"backend\":\"cuda\"") != std::string::npos);
+            assert(line.find("\"memory_kind\":\"device\"") != std::string::npos);
+        }
+        if (line.find("\"event_kind\":\"cpu_work\"") != std::string::npos) {
+            assert(line.find("\"backend\":\"cpu\"") != std::string::npos);
+        }
+        if (line.find("\"event_kind\":\"transfer\"") != std::string::npos) {
+            assert(line.find("\"memcpy_kind\":\"host_to_device\"") != std::string::npos);
+            assert(line.find("\"raw_memcpy_kind\":1") != std::string::npos);
+            assert(line.find("\"sync_type\":\"stream\"") != std::string::npos);
+        }
+        if (line.find("\"event_kind\":\"kv_cache\"") != std::string::npos) {
+            assert(line.find("\"kv_op\":\"seq_rm\"") != std::string::npos);
         }
         if (line.find("\"event_kind\":\"nvtx_marker\"") != std::string::npos) {
             assert(line.find("\"correlation_token\":999") != std::string::npos);
@@ -61,7 +84,11 @@ int main() {
         }
         if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
             summary_seen = true;
-            assert(line.find("\"events_drained\":4259") != std::string::npos);
+            assert(line.find("\"label\":\"sink.summary\"") != std::string::npos);
+            assert(line.find("\"monotonic_ns\":") != std::string::npos);
+            assert(line.find("\"request_id\":0") != std::string::npos);
+            assert(line.find("\"value0\":4261") != std::string::npos);
+            assert(line.find("\"events_drained\":4261") != std::string::npos);
             assert(line.find("\"dropped_events\":0") != std::string::npos);
             assert(line.find("\"write_errors\":0") != std::string::npos);
         }
@@ -69,7 +96,7 @@ int main() {
     }
     input.close();
     std::remove(path.c_str());
-    assert(count == 4260);
+    assert(count == 4262);
     assert(summary_seen);
     return 0;
 }

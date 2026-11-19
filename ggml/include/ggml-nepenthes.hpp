@@ -27,6 +27,27 @@ enum EventFlags : std::uint16_t {
     flag_device = 1u << 4,
 };
 
+enum class Backend : std::uint8_t { unknown, cpu, cuda, metal, vulkan, rocm, musa };
+enum class MemoryKind : std::uint8_t { unknown, host, host_pinned, device, managed, vmm };
+enum class MemcpyKind : std::uint8_t {
+    unknown, host_to_host, host_to_device, device_to_host, device_to_device, peer_to_peer, default_kind
+};
+enum class SyncType : std::uint8_t { unknown, stream, device, event, context };
+enum class KvOp : std::uint8_t {
+    unknown, clear, seq_rm, seq_cp, seq_keep, seq_add, seq_div, prepare, update, apply_ubatch
+};
+enum class AttributionLevel : std::uint8_t { unknown, exact, windowed, device_wide, estimated };
+
+struct EventMetadata {
+    Backend backend = Backend::unknown;
+    MemoryKind memory_kind = MemoryKind::unknown;
+    MemcpyKind memcpy_kind = MemcpyKind::unknown;
+    SyncType sync_type = SyncType::unknown;
+    KvOp kv_op = KvOp::unknown;
+    AttributionLevel attribution_level = AttributionLevel::unknown;
+    std::uint32_t raw_memcpy_kind = 0xffffffffu;
+};
+
 struct Event {
     std::uint64_t monotonic_ns = 0;
     std::uint64_t timestamp_unix_ns = 0;
@@ -37,6 +58,7 @@ struct Event {
     std::uint64_t value1 = 0;
     EventType type = EventType::error;
     std::uint16_t flags = phase_instant;
+    EventMetadata metadata{};
     const char * label = nullptr; // borrowed; sinks must consume/copy during callback
 };
 
@@ -50,7 +72,51 @@ GGML_API void emit(EventType type, const char * label = nullptr,
                    std::uint16_t flags = phase_instant,
                    std::uint64_t request_id = 0,
                    std::uint64_t duration_ns = 0,
-                   std::uint64_t correlation_token = 0) noexcept;
+                   std::uint64_t correlation_token = 0,
+                   EventMetadata metadata = {}) noexcept;
+
+inline EventMetadata gpu_metadata(Backend backend,
+                                  MemoryKind memory = MemoryKind::unknown,
+                                  MemcpyKind copy = MemcpyKind::unknown,
+                                  SyncType sync = SyncType::unknown,
+                                  std::uint32_t raw_copy = 0xffffffffu) noexcept {
+    EventMetadata metadata;
+    metadata.backend = backend;
+    metadata.memory_kind = memory;
+    metadata.memcpy_kind = copy;
+    metadata.sync_type = sync;
+    metadata.raw_memcpy_kind = raw_copy;
+    return metadata;
+}
+
+inline EventMetadata cpu_metadata() noexcept {
+    EventMetadata metadata;
+    metadata.backend = Backend::cpu;
+    return metadata;
+}
+
+inline EventMetadata kv_metadata(KvOp op) noexcept {
+    EventMetadata metadata;
+    metadata.kv_op = op;
+    return metadata;
+}
+
+inline EventMetadata context_sync_metadata() noexcept {
+    EventMetadata metadata;
+    metadata.sync_type = SyncType::context;
+    return metadata;
+}
+
+inline void emit_gpu(Backend backend, EventType type, const char * label = nullptr,
+                      std::uint64_t value0 = 0, std::uint64_t value1 = 0,
+                      std::uint16_t flags = phase_instant,
+                      std::uint64_t request_id = 0,
+                      std::uint64_t duration_ns = 0,
+                      std::uint64_t correlation_token = 0,
+                      EventMetadata metadata = {}) noexcept {
+    metadata.backend = backend;
+    emit(type, label, value0, value1, flags, request_id, duration_ns, correlation_token, metadata);
+}
 
 inline std::uint64_t next_correlation_token() noexcept {
     static std::atomic<std::uint64_t> next{1};
@@ -67,10 +133,11 @@ class ScopedEvent {
 public:
     ScopedEvent(EventType type, const char * label,
                 std::uint64_t value0 = 0, std::uint64_t value1 = 0,
-                std::uint64_t request_id = 0) noexcept
+                std::uint64_t request_id = 0,
+                EventMetadata metadata = {}) noexcept
         : type_(type), label_(label), value0_(value0), value1_(value1),
-          request_id_(request_id), start_ns_(now_ns()) {
-        emit(type_, label_, value0_, value1_, phase_begin, request_id_);
+          request_id_(request_id), metadata_(metadata), start_ns_(now_ns()) {
+        emit(type_, label_, value0_, value1_, phase_begin, request_id_, 0, 0, metadata_);
     }
 
     ScopedEvent(const ScopedEvent &) = delete;
@@ -79,7 +146,7 @@ public:
     ~ScopedEvent() noexcept {
         const std::uint64_t end_ns = now_ns();
         emit(type_, label_, value0_, value1_, phase_end, request_id_,
-             end_ns >= start_ns_ ? end_ns - start_ns_ : 0);
+             end_ns >= start_ns_ ? end_ns - start_ns_ : 0, 0, metadata_);
     }
 
 private:
@@ -88,6 +155,7 @@ private:
     std::uint64_t value0_;
     std::uint64_t value1_;
     std::uint64_t request_id_;
+    EventMetadata metadata_{};
     std::uint64_t start_ns_;
 };
 
