@@ -29,9 +29,10 @@ class JsonlSink final {
     };
 
 public:
-    explicit JsonlSink(const std::string & path, std::string run_id = "llama.cpp")
+    explicit JsonlSink(const std::string & path, std::string run_id = "llama.cpp", bool request_only = false)
         : run_id_json_(escape_json(run_id)),
-          output_(path, std::ios::out | std::ios::app) {
+          output_(path, std::ios::out | std::ios::app),
+          request_only_(request_only) {
         for (std::size_t i = 0; i < capacity; ++i) {
             queue_[i].sequence.store(i, std::memory_order_relaxed);
         }
@@ -131,6 +132,10 @@ private:
     }
 
     void push(const Event & event) noexcept {
+        if (request_only_ && event.type != EventType::request_start &&
+            event.type != EventType::request_end && event.type != EventType::clock_calibration) {
+            return;
+        }
         std::size_t pos = enqueue_.load(std::memory_order_relaxed);
         for (;;) {
             Cell & cell = queue_[pos & (capacity - 1)];
@@ -216,6 +221,7 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> closed_{false};
     std::ofstream output_;
+    bool request_only_ = false;
     std::thread writer_;
 };
 
