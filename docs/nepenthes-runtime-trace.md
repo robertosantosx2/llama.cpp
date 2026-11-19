@@ -101,3 +101,10 @@ The server assigns a process-monotonic `correlation_token` to each accepted slot
 The JSONL sink emits `clock_calibration` records at sink start and shutdown. Those records, plus request records carrying a correlation token, capture `monotonic_ns` and `timestamp_unix_ns` at the producer callsite, not when the writer thread later drains the queue. Other high-frequency events carry the monotonic clock only and use `timestamp_unix_ns=0` to indicate that no wall-clock sample was taken. This avoids a system-clock read on every hot-path event. `clock_domain` is `steady_clock`. The importer must retain both values and estimate offset/drift from start/end calibration records; these host-only records do not calibrate the Nsight clock.
 
 `attribution_level=exact` on a record means that record itself carries the explicit request token. Events without a token emit null attribution. This slice deliberately does **not** propagate one request token into shared graph/CPU/GPU work: llama.cpp can batch multiple slots into one graph, so assigning one slot token to that graph would be false attribution. NVTX/CUPTI external-correlation markers and verified Nsight round-trip remain C07 work; no kernel attribution is claimed yet.
+
+
+## NVTX request markers (CUDA build)
+
+When a CUDA build can find the CUDA Toolkit's NVTX v3 headers, server-context emits instantaneous NVTX markers at request start/end. Each marker name carries the same explicit correlation token as the JSONL request lifecycle. A companion JSONL `nvtx_marker` event records the host-monotonic bracket around the NVTX call, so the importer can match the token and estimate the host↔Nsight clock transform with a visible call-bracket uncertainty.
+
+The marker is a window boundary, not a CUPTI external correlation ID attached to every kernel. A GPU activity inside one uniquely bounded request window may be reported as `windowed`; overlapping windows remain ambiguous. No kernel gets `exact` request attribution from an NVTX marker alone. CPU-only builds and CUDA builds without NVTX v3 headers compile without the marker feature and do not claim it is active.
