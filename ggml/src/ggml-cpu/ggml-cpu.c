@@ -13,8 +13,12 @@
 #include "vec.h"
 #include "ops.h"
 #include "ggml.h"
+#include "ggml-nepenthes-c.h"
 #include "common.h"
 #include "tiled/tiled.h"
+
+
+
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -3118,6 +3122,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     const struct ggml_cgraph * cgraph = tp->cgraph;
     const struct ggml_cplan  * cplan  = tp->cplan;
 
+    const int nepenthes_trace = ggml_nepenthes_trace_enabled();
+    const uint64_t nepenthes_work_start_us = nepenthes_trace ? ggml_time_us() : 0;
+
 #ifdef GGML_USE_CPU_RISCV64_SPACEMIT
     ggml_backend_cpu_riscv64_spacemit_set_numa_thread_affinity(state->ith);
 #else
@@ -3183,6 +3190,16 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     ggml_backend_cpu_riscv64_spacemit_clear_numa_thread_affinity_threaded(state->ith);
 #endif
 
+    if (nepenthes_trace) {
+        const uint64_t nepenthes_work_end_us = ggml_time_us();
+        const uint64_t nepenthes_work_duration_ns =
+                nepenthes_work_end_us >= nepenthes_work_start_us
+                ? (nepenthes_work_end_us - nepenthes_work_start_us) * 1000
+                : 0;
+        ggml_nepenthes_emit_cpu_work((uint64_t) state->ith,
+                (uint64_t) cgraph->n_nodes, nepenthes_work_duration_ns);
+    }
+
     return 0;
 }
 
@@ -3242,12 +3259,25 @@ static inline bool ggml_graph_compute_check_for_work(struct ggml_compute_state *
     }
 
     ggml_mutex_lock_shared(&threadpool->mutex);
+    const int nepenthes_trace = ggml_nepenthes_trace_enabled();
+    const uint64_t nepenthes_wait_start_us = nepenthes_trace ? ggml_time_us() : 0;
+    bool nepenthes_waited = false;
     while (!ggml_graph_compute_thread_ready(state)) {
         // No new work. Wait for the signal.
         GGML_PRINT_DEBUG("thread #%d waiting for work (sleeping)\n", state->ith);
         ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
+        nepenthes_waited = true;
     }
     ggml_mutex_unlock_shared(&threadpool->mutex);
+
+    if (nepenthes_trace && nepenthes_waited) {
+        const uint64_t nepenthes_wait_end_us = ggml_time_us();
+        const uint64_t nepenthes_wait_duration_ns =
+                nepenthes_wait_end_us >= nepenthes_wait_start_us
+                ? (nepenthes_wait_end_us - nepenthes_wait_start_us) * 1000
+                : 0;
+        ggml_nepenthes_emit_cpu_wait((uint64_t) state->ith, nepenthes_wait_duration_ns);
+    }
 
     return state->pending;
 }
