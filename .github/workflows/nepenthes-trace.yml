@@ -83,7 +83,18 @@ jobs:
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Isrc -Iggml/include -Iinclude \
             tests/nepenthes/test_jsonl_sink.cpp ggml/src/ggml-nepenthes.cpp -o /tmp/nepenthes-jsonl-test
-          /tmp/nepenthes-jsonl-test
+          /tmp/nepenthes-jsonl-test --keep-trace
+      - name: Checkout shared LEONES importer and fixtures
+        uses: actions/checkout@v4
+        with:
+          repository: robertosantosx2/LEONES
+          ref: c2151bba23fb4a9a3d746e696283d4e599f2e332
+          path: leones
+      - name: Validate emitted JSONL with the shared importer
+        run: |
+          python3 leones/scripts/nepenthes_llama_trace_import.py nepenthes-jsonl-test.jsonl \
+            --source llama.cpp --output /tmp/nepenthes-trace-summary.json
+          python3 -m unittest discover -s leones/tests -p 'test_nepenthes_llama_trace_import.py'
       - name: Compile and run CPU worker bridge test
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Iggml/include -Iinclude \
