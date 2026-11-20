@@ -72,7 +72,7 @@ The shared event API now lives in ggml-base so llama and backend translation uni
 - CUDA VMM pool allocation/free and physical allocation outcomes.
 - Pinned-host allocation/free and fallback to ordinary CPU buffers.
 - CUDA H2D/D2H transfers through synchronous buffer operations and asynchronous backend submissions; 2D and batch paths retain row/count or tensor-count metadata.
-- CUDA D2D/peer copy attempts and batch copies.
+- CUDA D2D/peer copy attempts and batch copies. For `cuda.device_copy_async_attempt`, `value1=0` means both virtual devices resolve to the same physical GPU and `value1=1` means distinct physical GPUs; backend-handle inequality alone is not used as a peer-copy proxy.
 - CUDA op dispatch duration, identified by ggml op enum and output element count.
 - CUDA stream synchronization duration.
 
