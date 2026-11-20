@@ -3365,16 +3365,18 @@ static bool ggml_backend_cuda_cpy_tensor_async(ggml_backend_t backend_src, ggml_
         return false;
     }
 
+    // Distinct virtual backends may share one physical device; record the actual
+    // physical-device relationship rather than backend-handle inequality.
+    const int src_physical = ggml_cuda_get_physical_device(cuda_ctx_src->device);
+    const int dst_physical = ggml_cuda_get_physical_device(cuda_ctx_dst->device);
     nepenthes::ScopedEvent nepenthes_copy(nepenthes::EventType::transfer, "cuda.device_copy_async_attempt",
             static_cast<std::uint64_t>(ggml_nbytes(dst)),
-            static_cast<std::uint64_t>(backend_src != backend_dst ? 1 : 0));
+            static_cast<std::uint64_t>(src_physical != dst_physical ? 1 : 0));
 
     if (backend_src != backend_dst) {
         // copy on src stream
         // compare the backing physical devices: distinct virtual devices may share one physical GPU,
         // in which case a same-device copy (not a peer copy) is required
-        const int src_physical = ggml_cuda_get_physical_device(cuda_ctx_src->device);
-        const int dst_physical = ggml_cuda_get_physical_device(cuda_ctx_dst->device);
         if (src_physical == dst_physical) {
             CUDA_CHECK(cudaMemcpyAsync(dst->data, src->data, ggml_nbytes(dst), cudaMemcpyDeviceToDevice, cuda_ctx_src->stream()));
         } else {
