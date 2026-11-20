@@ -7,7 +7,8 @@
 #include <thread>
 #include <vector>
 
-int main() {
+int main(int argc, char ** argv) {
+    const bool keep_trace = argc > 1 && std::string(argv[1]) == "--keep-trace";
     const std::string path = "nepenthes-jsonl-test.jsonl";
     std::remove(path.c_str());
     {
@@ -16,8 +17,12 @@ int main() {
             nepenthes::emit(nepenthes::EventType::kernel, "cuda.kernel", i, 4096,
                             nepenthes::phase_instant, 0, 0, i + 1);
         }
+        nepenthes::emit(nepenthes::EventType::request_start, "server.task", 7, 2,
+                        nepenthes::phase_instant, 42, 0, 999);
         nepenthes::emit(nepenthes::EventType::nvtx_marker, "request.start", 100, 120,
                         nepenthes::phase_begin, 42, 0, 999);
+        nepenthes::emit(nepenthes::EventType::request_end, "server.task", 7, 2,
+                        nepenthes::phase_instant, 42, 0, 999);
         std::vector<std::thread> producers;
         for (std::uint64_t t = 0; t < 4; ++t) {
             producers.emplace_back([t] {
@@ -61,17 +66,37 @@ int main() {
         }
         if (line.find("\"event_kind\":\"sink_summary\"") != std::string::npos) {
             summary_seen = true;
-            assert(line.find("\"events_drained\":4259") != std::string::npos);
+            assert(line.find("\"events_drained\":4261") != std::string::npos);
             assert(line.find("\"dropped_events\":0") != std::string::npos);
             assert(line.find("\"write_errors\":0") != std::string::npos);
         }
         ++count;
     }
     input.close();
-    std::remove(path.c_str());
-    assert(count == 4260);
+    if (!keep_trace) std::remove(path.c_str());
+    assert(count == 4262);
     assert(summary_seen);
 
+    // Existing trace paths must be rejected without truncating or appending to prior evidence.
+    const std::string existing_path = "nepenthes-jsonl-existing.jsonl";
+    std::remove(existing_path.c_str());
+    {
+        std::ofstream existing(existing_path);
+        existing << "preserve-this-run\\n";
+    }
+    bool existing_rejected = false;
+    try {
+        nepenthes::JsonlSink existing_sink(existing_path, "must-not-append");
+    } catch (const std::runtime_error &) {
+        existing_rejected = true;
+    }
+    assert(existing_rejected);
+    {
+        std::ifstream existing(existing_path);
+        std::getline(existing, line);
+        assert(line == "preserve-this-run");
+    }
+    std::remove(existing_path.c_str());
 
     // latency-critical retains only request lifecycle and clock calibration events.
     const std::string latency_path = "nepenthes-jsonl-latency-critical.jsonl";
