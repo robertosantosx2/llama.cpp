@@ -20,7 +20,7 @@ Each event is one JSON object per line. Current fields:
 - `run_id`, `event_id`, `source`: run and producer identity.
 - `timestamp_unix_ns`: wall-clock timestamp for cross-tool correlation.
 - `monotonic_ns`: steady-clock timestamp for local duration/order analysis.
-- `request_id`: actual server task ID for request lifecycle events; zero for internal events without safe correlation.
+- `request_id`: `server_queue` task ID for the slot-task lifecycle; zero for internal events without safe task correlation. It is not a transport connection ID or a guaranteed one-to-one HTTP request ID.
 - `event_kind`, `label`: event class and stable callsite label.
 - `value0`, `value1`: callsite-specific integer metadata.
 - `duration_ns`: duration for scoped begin/end events; zero for instant events.
@@ -32,7 +32,7 @@ A final `sink_summary` record reports events drained, dropped events and writer 
 
 | Area | Events | Meaning |
 |---|---|---|
-| Server request lifecycle | `request_start`, `request_end` | Server task ID and slot ID; request_id is the task ID |
+| Server task lifecycle | `request_start`, `request_end` | Server task ID and slot ID; one HTTP request may fan out into multiple task IDs (multi-prompt or `n_cmpl`) |
 | Graph execution | `graph_compute` | Host-side graph-compute call duration, graph node count and batched flag |
 | Synchronization | `sync` | Context synchronization duration |
 | MoE expert cache | `cache_hit`, `cache_miss`, `eviction` | Planner hit/miss counts, CPU fallback count, evicted layer/expert |
@@ -46,13 +46,14 @@ A final `sink_summary` record reports events drained, dropped events and writer 
 - Event labels are borrowed static strings; no label allocation is performed on the emit path.
 - Sink shutdown disables new callbacks, waits for callbacks already in flight, drains the queue, writes a summary record and joins the writer.
 - The queue may drop events under sustained overload; the summary record exposes the drop count.
-- The sink appends to the configured path. Use a unique run ID and preferably a fresh file per run.
+- The sink creates the configured path exclusively and fails closed if it already exists; it never appends to or truncates a previous run. Use a unique path and run ID per execution.
 
 ## Interpretation limits
 
 - Graph-compute spans are not individual kernel timings.
 - The MoE upload event measures bytes submitted at the host callsite, not DMA completion.
 - Internal KV and MoE events use request_id=0. No cross-thread request identity is fabricated.
+- Task-level request windows must not be relabelled as HTTP request windows. A multi-prompt or `n_cmpl` HTTP request can produce several task windows; overlapping windows remain ambiguous and are not assigned shared HTTP ownership.
 - Prompts, generated text, tokens and model input/output payloads are not recorded.
 - General allocator/OOM/fallback probes, CUDA memcpy callsites, CUDA op dispatch, and additional CPU worker/prefetch spans are follow-up work. Actual GPU kernel timings and runtime transfer activities remain sourced from Nsight Systems/CUPTI.
 
@@ -96,7 +97,7 @@ No generic CPU expert-prefetch worker is present in this upstream llama.cpp path
 
 ## Explicit request correlation and clock calibration (follow-up)
 
-The server assigns a process-monotonic `correlation_token` to each accepted slot task and emits the same token on its `request_start` and `request_end` records. The native server `request_id` remains unchanged. Tokens are opaque unsigned 64-bit values, unique within one process lifetime; they are not UUIDs and must be scoped by `run_id`.
+The server assigns a process-monotonic `correlation_token` to each accepted slot task and emits the same token on its `request_start` and `request_end` records. The native `request_id` is the `server_task.id`, not an HTTP request ID. A single HTTP request can fan out into multiple server tasks (for example, multiple prompts or `n_cmpl > 1`), each with its own task ID and token; therefore this trace describes task-level inference lifecycles and does not claim a one-to-one transport-request mapping. Tokens are opaque unsigned 64-bit values, unique within one process lifetime; they are not UUIDs and must be scoped by `run_id`.
 
 The JSONL sink emits `clock_calibration` records at sink start and shutdown. Those records, plus request records carrying a correlation token, capture `monotonic_ns` and `timestamp_unix_ns` at the producer callsite, not when the writer thread later drains the queue. Other high-frequency events carry the monotonic clock only and use `timestamp_unix_ns=0` to indicate that no wall-clock sample was taken. This avoids a system-clock read on every hot-path event. `clock_domain` is `steady_clock`. The importer must retain both values and estimate offset/drift from start/end calibration records; these host-only records do not calibrate the Nsight clock.
 
