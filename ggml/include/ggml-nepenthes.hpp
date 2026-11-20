@@ -52,6 +52,12 @@ GGML_API void emit(EventType type, const char * label = nullptr,
                    std::uint64_t duration_ns = 0,
                    std::uint64_t correlation_token = 0) noexcept;
 
+// Server task IDs begin at zero; request_id=0 is reserved for uncorrelated events.
+// Preserve the raw task ID separately in event metadata/value fields.
+inline std::uint64_t request_id_from_task_id(std::int64_t task_id) noexcept {
+    return task_id < 0 ? 0 : static_cast<std::uint64_t>(task_id) + 1;
+}
+
 inline std::uint64_t next_correlation_token() noexcept {
     static std::atomic<std::uint64_t> next{1};
     return next.fetch_add(1, std::memory_order_relaxed);
