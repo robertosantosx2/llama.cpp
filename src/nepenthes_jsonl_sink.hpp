@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -31,16 +30,20 @@ class JsonlSink final {
 public:
     explicit JsonlSink(const std::string & path, std::string run_id = "llama.cpp", bool request_only = false)
         : run_id_json_(escape_json(run_id)),
-          output_(path, std::ios::out | std::ios::app),
+          output_(open_exclusive(path)),
           request_only_(request_only) {
         for (std::size_t i = 0; i < capacity; ++i) {
             queue_[i].sequence.store(i, std::memory_order_relaxed);
         }
-        if (!output_) {
-            throw std::runtime_error("cannot open NEPENTHES JSONL sink: " + path);
+        try {
+            running_.store(true, std::memory_order_release);
+            writer_ = std::thread([this] { drain(); });
+        } catch (...) {
+            std::fclose(output_);
+            output_ = nullptr;
+            std::remove(path.c_str());
+            throw;
         }
-        running_.store(true, std::memory_order_release);
-        writer_ = std::thread([this] { drain(); });
         active_.store(this, std::memory_order_release);
         set_sink(&JsonlSink::callback);
         emit(EventType::clock_calibration, "clock.calibration.start");
@@ -58,8 +61,11 @@ public:
         active_.store(nullptr, std::memory_order_release);
         running_.store(false, std::memory_order_release);
         if (writer_.joinable()) writer_.join();
-        output_.flush();
-        if (!output_) write_errors_.fetch_add(1, std::memory_order_relaxed);
+        if (output_ != nullptr) {
+            if (std::fflush(output_) != 0) write_errors_.fetch_add(1, std::memory_order_relaxed);
+            if (std::fclose(output_) != 0) write_errors_.fetch_add(1, std::memory_order_relaxed);
+            output_ = nullptr;
+        }
     }
 
     std::uint64_t dropped() const noexcept {
@@ -70,6 +76,15 @@ public:
     }
 
 private:
+    static std::FILE * open_exclusive(const std::string & path) {
+        // C11 "x" mode uses exclusive creation: never append to or truncate a prior run.
+        std::FILE * file = std::fopen(path.c_str(), "wx");
+        if (file == nullptr) {
+            throw std::runtime_error("cannot create exclusive NEPENTHES JSONL sink (path exists or is unavailable): " + path);
+        }
+        return file;
+    }
+
     static std::string escape_json(const std::string & value) {
         static constexpr char hex[] = "0123456789abcdef";
         std::string out;
@@ -177,37 +192,46 @@ private:
                 continue;
             }
             const auto id = next_id_.fetch_add(1, std::memory_order_relaxed);
-            output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
-                    << "\",\"event_id\":\"llama-" << id
-                    << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << event.timestamp_unix_ns
-                    << ",\"monotonic_ns\":" << event.monotonic_ns
-                    << ",\"request_id\":" << event.request_id
-                    << ",\"correlation_token\":";
-            if (event.correlation_token == 0) output_ << "null";
-            else output_ << event.correlation_token;
-            output_ << ",\"attribution_level\":";
-            if (event.correlation_token == 0) output_ << "null";
-            else output_ << "\"exact\"";
-            output_ << ",\"clock_domain\":\"steady_clock\""
-                    << ",\"event_kind\":\"" << type_name(event.type)
-                    << "\",\"label\":\"" << escape_json(event.label ? event.label : "")
-                    << "\",\"value0\":" << event.value0
-                    << ",\"value1\":" << event.value1
-                    << ",\"duration_ns\":" << event.duration_ns
-                    << ",\"flags\":" << event.flags << "}\n";
-            if (!output_) write_errors_.fetch_add(1, std::memory_order_relaxed);
+            const std::string label_json = escape_json(event.label ? event.label : "");
+            char token_json[32];
+            if (event.correlation_token == 0) {
+                std::snprintf(token_json, sizeof(token_json), "null");
+            } else {
+                std::snprintf(token_json, sizeof(token_json), "%llu",
+                              static_cast<unsigned long long>(event.correlation_token));
+            }
+            const char * attribution_json = event.correlation_token == 0 ? "null" : "\"exact\"";
+            const int written = std::fprintf(output_,
+                    "{\"schema_version\":\"1.0\",\"run_id\":\"%s\",\"event_id\":\"llama-%llu\","
+                    "\"source\":\"llama.cpp\",\"timestamp_unix_ns\":%llu,\"monotonic_ns\":%llu,"
+                    "\"request_id\":%llu,\"correlation_token\":%s,\"attribution_level\":%s,"
+                    "\"clock_domain\":\"steady_clock\",\"event_kind\":\"%s\",\"label\":\"%s\","
+                    "\"value0\":%llu,\"value1\":%llu,\"duration_ns\":%llu,\"flags\":%u}\n",
+                    run_id_json_.c_str(), static_cast<unsigned long long>(id),
+                    static_cast<unsigned long long>(event.timestamp_unix_ns),
+                    static_cast<unsigned long long>(event.monotonic_ns),
+                    static_cast<unsigned long long>(event.request_id), token_json, attribution_json,
+                    type_name(event.type), label_json.c_str(),
+                    static_cast<unsigned long long>(event.value0),
+                    static_cast<unsigned long long>(event.value1),
+                    static_cast<unsigned long long>(event.duration_ns),
+                    static_cast<unsigned int>(event.flags));
+            if (written < 0) write_errors_.fetch_add(1, std::memory_order_relaxed);
         }
         const auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         const auto summary_id = next_id_.fetch_add(1, std::memory_order_relaxed);
-        output_ << "{\"schema_version\":\"1.0\",\"run_id\":\"" << run_id_json_
-                << "\",\"event_id\":\"llama-" << summary_id
-                << "\",\"source\":\"llama.cpp\",\"timestamp_unix_ns\":" << wall_ns
-                << ",\"event_kind\":\"sink_summary\",\"events_drained\":" << (summary_id - 1)
-                << ",\"dropped_events\":" << dropped_.load(std::memory_order_relaxed)
-                << ",\"write_errors\":" << write_errors_.load(std::memory_order_relaxed) << "}\n";
-        output_.flush();
-        if (!output_) write_errors_.fetch_add(1, std::memory_order_relaxed);
+        const int summary_written = std::fprintf(output_,
+                "{\"schema_version\":\"1.0\",\"run_id\":\"%s\",\"event_id\":\"llama-%llu\","
+                "\"source\":\"llama.cpp\",\"timestamp_unix_ns\":%llu,\"event_kind\":\"sink_summary\","
+                "\"events_drained\":%llu,\"dropped_events\":%llu,\"write_errors\":%llu}\n",
+                run_id_json_.c_str(), static_cast<unsigned long long>(summary_id),
+                static_cast<unsigned long long>(wall_ns),
+                static_cast<unsigned long long>(summary_id - 1),
+                static_cast<unsigned long long>(dropped_.load(std::memory_order_relaxed)),
+                static_cast<unsigned long long>(write_errors_.load(std::memory_order_relaxed)));
+        if (summary_written < 0) write_errors_.fetch_add(1, std::memory_order_relaxed);
+        if (std::fflush(output_) != 0) write_errors_.fetch_add(1, std::memory_order_relaxed);
     }
 
     inline static std::atomic<JsonlSink *> active_{nullptr};
@@ -220,7 +244,7 @@ private:
     std::atomic<std::uint64_t> write_errors_{0};
     std::atomic<bool> running_{false};
     std::atomic<bool> closed_{false};
-    std::ofstream output_;
+    std::FILE * output_ = nullptr;
     bool request_only_ = false;
     std::thread writer_;
 };
