@@ -25,7 +25,7 @@ on:
       - "docs/nepenthes-runtime-trace.md"
       - ".github/workflows/nepenthes-trace.yml"
   push:
-    branches: [master]
+    branches: [master, 'nepenthes/**']
     paths:
       - "src/nepenthes_trace.hpp"
       - "src/llama-model.cpp"
