@@ -82,7 +82,7 @@ int main(int argc, char ** argv) {
     std::remove(existing_path.c_str());
     {
         std::ofstream existing(existing_path);
-        existing << "preserve-this-run\\n";
+        existing << "preserve-this-run\n";
     }
     bool existing_rejected = false;
     try {
