@@ -717,10 +717,10 @@ struct server_slot {
 
             if (task) {
                 nepenthes_nvtx_request_marker("end", nepenthes_correlation_token,
-                        static_cast<std::uint64_t>(task->id), nepenthes::phase_end);
+                        nepenthes::request_id_from_task_id(task->id), nepenthes::phase_end);
                 nepenthes::emit(nepenthes::EventType::request_end, "server.task",
                         static_cast<std::uint64_t>(task->id), static_cast<std::uint64_t>(id),
-                        nepenthes::phase_instant, static_cast<std::uint64_t>(task->id), 0,
+                        nepenthes::phase_instant, nepenthes::request_id_from_task_id(task->id), 0,
                         nepenthes_correlation_token);
             }
 
@@ -2105,10 +2105,10 @@ private:
         slot.nepenthes_correlation_token = nepenthes::next_correlation_token();
 
         nepenthes_nvtx_request_marker("start", slot.nepenthes_correlation_token,
-                static_cast<std::uint64_t>(slot.task->id), nepenthes::phase_begin);
+                nepenthes::request_id_from_task_id(slot.task->id), nepenthes::phase_begin);
         nepenthes::emit(nepenthes::EventType::request_start, "server.task",
                 static_cast<std::uint64_t>(slot.task->id), static_cast<std::uint64_t>(slot.id),
-                nepenthes::phase_instant, static_cast<std::uint64_t>(slot.task->id), 0,
+                nepenthes::phase_instant, nepenthes::request_id_from_task_id(slot.task->id), 0,
                 slot.nepenthes_correlation_token);
 
         if (slot.task->type == SERVER_TASK_TYPE_TTS) {
