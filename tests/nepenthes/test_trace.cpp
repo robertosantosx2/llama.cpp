@@ -46,6 +46,10 @@ int main() {
     assert(last_flags == flag_device);
     assert(last_correlation_token == 777);
     assert(last_wall_ns > 0);
+    assert(request_id_from_task_id(-1) == 0);
+    assert(request_id_from_task_id(0) == 1);
+    assert(request_id_from_task_id(41) == 42);
+    assert(request_id_from_task_id(INT64_MAX) == (std::uint64_t{1} << 63));
     const auto token_a = next_correlation_token();
     const auto token_b = next_correlation_token();
     assert(token_a != 0 && token_b == token_a + 1);
