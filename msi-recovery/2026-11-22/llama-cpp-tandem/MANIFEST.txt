@@ -1,0 +1,75 @@
+Repository: llama.cpp
+Original HEAD: f5222f25c18da062ab2b8a2dbbfbf4feae398566
+Original branch: 
+Origin: https://github.com/ggml-org/llama.cpp
+Recovery date: 2026-11-22
+
+ common/arg.cpp                        |   26 +-
+ common/common.cpp                     |  122 +-
+ common/common.h                       |    7 +-
+ common/speculative.cpp                |  207 ++-
+ ggml/include/ggml-backend.h           |    2 +
+ ggml/include/ggml.h                   |  101 ++
+ ggml/src/ggml-backend.cpp             |  120 +-
+ ggml/src/ggml-cpu/ggml-cpu.c          |   49 +
+ ggml/src/ggml-cpu/ops.cpp             |   53 +-
+ ggml/src/ggml-cuda/common.cuh         |   25 +
+ ggml/src/ggml-cuda/dsv4-hc.cu         |   65 +-
+ ggml/src/ggml-cuda/gated_delta_net.cu |   47 +-
+ ggml/src/ggml-cuda/ggml-cuda.cu       |  393 ++++-
+ ggml/src/ggml-cuda/mmvf.cu            |   11 +
+ ggml/src/ggml-cuda/mmvq.cu            |  478 +++++-
+ ggml/src/ggml.c                       |  192 ++-
+ include/llama.h                       |   11 +-
+ src/llama-context.cpp                 |  262 +++-
+ src/llama-context.h                   |   29 +
+ src/llama-cparams.h                   |    1 +
+ src/llama-graph.cpp                   |  141 +-
+ src/llama-graph.h                     |   16 +-
+ src/llama-model.cpp                   |  362 +++++
+ src/llama-model.h                     |   31 +
+ src/llama-moe-cache.cpp               | 2704 +++++++++++++++++++++++++++++++--
+ src/llama-moe-cache.h                 |   56 +-
+ src/llama-quant.cpp                   |   25 +-
+ src/models/delta-net-base.cpp         |   12 +-
+ src/models/models.h                   |   21 +-
+ src/models/qwen4exp.cpp               |  189 ++-
+ tools/server/server-context.cpp       |  267 +++-
+ 31 files changed, 5798 insertions(+), 227 deletions(-)
+
+ M common/arg.cpp
+ M common/common.cpp
+ M common/common.h
+ M common/speculative.cpp
+ M ggml/include/ggml-backend.h
+ M ggml/include/ggml.h
+ M ggml/src/ggml-backend.cpp
+ M ggml/src/ggml-cpu/ggml-cpu.c
+ M ggml/src/ggml-cpu/ops.cpp
+ M ggml/src/ggml-cuda/common.cuh
+ M ggml/src/ggml-cuda/dsv4-hc.cu
+ M ggml/src/ggml-cuda/gated_delta_net.cu
+ M ggml/src/ggml-cuda/ggml-cuda.cu
+ M ggml/src/ggml-cuda/mmvf.cu
+ M ggml/src/ggml-cuda/mmvq.cu
+ M ggml/src/ggml.c
+ M include/llama.h
+ M src/llama-context.cpp
+ M src/llama-context.h
+ M src/llama-cparams.h
+ M src/llama-graph.cpp
+ M src/llama-graph.h
+ M src/llama-model.cpp
+ M src/llama-model.h
+ M src/llama-moe-cache.cpp
+ M src/llama-moe-cache.h
+ M src/llama-quant.cpp
+ M src/models/delta-net-base.cpp
+ M src/models/models.h
+ M src/models/qwen4exp.cpp
+ M tools/server/server-context.cpp
+?? ggml/src/ggml-cuda/hc-fused.cu
+?? ggml/src/ggml-cuda/hc-fused.cuh
+?? msi-recovery/
+?? src/llama-moe-iq.h
+?? src/llama-prof.h
