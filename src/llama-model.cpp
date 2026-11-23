@@ -1,4 +1,5 @@
 #include "llama-model.h"
+#include "nepenthes_trace.hpp"
 
 #include "llama-arch.h"
 #include "llama-ext.h"
@@ -1473,6 +1474,8 @@ llama_model::llama_model(const llama_model_params & params) : params(params), pi
 }
 
 llama_model::~llama_model() {
+    nepenthes::emit(nepenthes::EventType::model_unload, "llama.model_unload",
+            static_cast<std::uint64_t>(pimpl->n_bytes), static_cast<std::uint64_t>(pimpl->n_elements));
     for (auto * lora : loras) {
         delete lora;
     }
@@ -1725,6 +1728,8 @@ void llama_model_base::load_vocab(llama_model_loader & ml) {
 }
 
 bool llama_model_base::load_tensors(llama_model_loader & ml) {
+    nepenthes::ScopedEvent nepenthes_model_tensors(nepenthes::EventType::model_load, "llama.model_load_tensors",
+            static_cast<std::uint64_t>(pimpl->n_bytes), static_cast<std::uint64_t>(pimpl->n_elements));
     const auto & split_mode   = params.split_mode;
     const bool use_mlock      = params.load_mode == LLAMA_LOAD_MODE_MLOCK || params.load_mode == LLAMA_LOAD_MODE_MMAP_MLOCK;
     const auto & tensor_split = params.tensor_split;

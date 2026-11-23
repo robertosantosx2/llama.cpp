@@ -40,6 +40,24 @@ target_include_directories(${TARGET} PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(${TARGET} PUBLIC llama-common mtmd ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(${TARGET} PRIVATE vendor::hash)
 
+# Optional NVTX v3 markers for NEPENTHES request correlation in CUDA builds.
+# NVTX v3 is header-only; CPU-only builds do not acquire a CUDA/NVTX dependency.
+if (GGML_CUDA)
+    find_path(NEPENTHES_NVTX_INCLUDE_DIR nvtx3/nvToolsExt.h
+        HINTS ${CUDAToolkit_INCLUDE_DIRS} ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+        /usr/local/cuda/include)
+    if (NEPENTHES_NVTX_INCLUDE_DIR)
+        target_include_directories(server-context PRIVATE ${NEPENTHES_NVTX_INCLUDE_DIR})
+        target_compile_definitions(server-context PRIVATE NEPENTHES_USE_NVTX=1)
+        if (CMAKE_DL_LIBS)
+            target_link_libraries(server-context PRIVATE ${CMAKE_DL_LIBS})
+        endif()
+        message(STATUS "NEPENTHES: NVTX request markers enabled")
+    else()
+        message(STATUS "NEPENTHES: NVTX v3 headers not found; request markers disabled")
+    endif()
+endif()
+
 # llama-server-impl: server logic, reusable by app
 
 set(TARGET llama-server-impl)

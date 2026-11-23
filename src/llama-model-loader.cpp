@@ -5,6 +5,7 @@
 #include "gguf.h"
 #include "llama-hparams.h"
 #include "llama.h"
+#include "nepenthes_jsonl_sink.hpp"
 
 #include <algorithm>
 #include <array>
@@ -548,6 +549,7 @@ llama_model_loader::llama_model_loader(
         const llama_model_kv_override * param_overrides_p,
         const llama_model_tensor_buft_override * param_tensor_buft_overrides_p)
         : metadata(meta), set_tensor_data(set_tensor_data), set_tensor_data_ud(set_tensor_data_ud) {
+    nepenthes::ensure_sink_from_env();
     int trace = 0;
     if (getenv("LLAMA_TRACE")) {
         trace = atoi(getenv("LLAMA_TRACE"));
@@ -1650,6 +1652,8 @@ bool llama_model_loader::load_all_data(
         llama_mlocks * lmlocks,
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
+    nepenthes::ScopedEvent nepenthes_model_data(nepenthes::EventType::model_load, "llama.model_load_weights",
+            static_cast<std::uint64_t>(size_data), static_cast<std::uint64_t>(files.size()));
     if (files.empty()) {
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
             set_tensor_data(t, set_tensor_data_ud);
